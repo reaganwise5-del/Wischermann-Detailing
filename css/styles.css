@@ -268,8 +268,8 @@ dl, dd { margin: 0; }
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / .08), transparent);
 }
 
-/* Video (or photo) behind the hero, with a scrim so the headline stays readable. */
-.hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Photo behind the hero, with a scrim so the headline stays readable. */
+.hero-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .hero-scrim {
   position: absolute; inset: 0;
   background:
@@ -277,8 +277,8 @@ dl, dd { margin: 0; }
     linear-gradient(90deg, rgb(0 0 0 / .94) 0%, rgb(0 0 0 / .8) 42%, rgb(0 0 0 / .42) 100%),
     linear-gradient(180deg, rgb(0 0 0 / .85) 0%, transparent 28%, transparent 55%, #000 100%);
 }
-.hero--video .hero-bg { background: #000; }
-.hero--video .hero-art { display: none; }
+.hero--media .hero-bg { background: #000; }
+.hero--media .hero-art { display: none; }
 
 .hero-inner { display: grid; gap: 28px; align-items: center; }
 .hero-copy { container-type: inline-size; }
@@ -358,8 +358,8 @@ dl, dd { margin: 0; }
 @media (min-width: 960px) {
   .hero { min-height: min(100svh, 920px); display: flex; align-items: center; padding-bottom: 96px; }
   .hero-inner { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 40px; }
-  .hero--video .hero-inner { grid-template-columns: minmax(0, 1fr); }
-  .hero--video .hero-copy { max-width: 46rem; }
+  .hero--media .hero-inner { grid-template-columns: minmax(0, 1fr); }
+  .hero--media .hero-copy { max-width: 46rem; }
   .hero-art { order: 0; }
   .hero-stage { width: min(100%, 520px); padding-top: 0; }
   .hero-actions .btn { flex: 0 0 auto; }
@@ -497,6 +497,12 @@ dl, dd { margin: 0; }
 .addons-title { font-size: 1.35rem; }
 .addons-head p { font-size: .95rem; color: var(--text-dim); }
 
+.addon-group-label {
+  margin: 24px 0 10px;
+  font-family: var(--font-display); font-size: .72rem; font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--brand-light);
+}
+.addons-head + .addon-group-label { margin-top: 0; }
 .addon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .addon {
   display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-sm);

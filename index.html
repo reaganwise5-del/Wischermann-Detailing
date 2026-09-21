@@ -62,6 +62,8 @@
     <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
     <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+    <symbol id="i-waves" viewBox="0 0 24 24"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></symbol>
+    <symbol id="i-steam" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
     <symbol id="i-wind" viewBox="0 0 24 24"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
     <symbol id="i-wand" viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></symbol>
@@ -133,10 +135,10 @@
   <main id="main">
 
     <!-- ========== Hero ========== -->
-    <!-- Hero background: remove the hero--video class (and the <video> below) to go back to the logo artwork. -->
-    <section class="hero hero--video" id="home" aria-labelledby="hero-title">
+    <!-- Hero background photo: swap the file below to change it, or drop the hero--media class to go back to the logo artwork. -->
+    <section class="hero hero--media" id="home" aria-labelledby="hero-title">
       <div class="hero-bg" aria-hidden="true">
-        <video class="hero-video" src="images/work/hero-clip.mp4" poster="images/work/hero-poster.jpg" autoplay muted loop playsinline preload="metadata"></video>
+        <img class="hero-photo" src="images/work/hero-foam-1280.jpg" srcset="images/work/hero-foam-640.jpg 640w, images/work/hero-foam-1280.jpg 1280w" sizes="100vw" alt="" width="1280" height="720" fetchpriority="high">
         <span class="hero-scrim"></span>
       </div>
 
@@ -292,6 +294,7 @@
             <h3 class="addons-title">Add-ons</h3>
             <p>Stack any of these onto a package. Flat price, any vehicle.</p>
           </div>
+          <p class="addon-group-label">Inside</p>
           <ul class="addon-grid">
             <li class="addon" data-addon="pet-hair" data-name="Pet hair removal" data-price="25">
               <svg class="icon"><use href="#i-paw"></use></svg><span class="addon-name">Pet hair removal</span><span class="addon-price">+$25</span>
@@ -299,23 +302,33 @@
             <li class="addon" data-addon="shampoo" data-name="Seat &amp; carpet shampoo" data-price="40">
               <svg class="icon"><use href="#i-spray"></use></svg><span class="addon-name">Seat &amp; carpet shampoo</span><span class="addon-price">+$40</span>
             </li>
-            <li class="addon" data-addon="clay-bar" data-name="Clay bar treatment" data-price="40">
-              <svg class="icon"><use href="#i-eraser"></use></svg><span class="addon-name">Clay bar treatment</span><span class="addon-price">+$40</span>
-            </li>
-            <li class="addon" data-addon="headlights" data-name="Headlight restoration" data-price="50">
-              <svg class="icon"><use href="#i-sun"></use></svg><span class="addon-name">Headlight restoration</span><span class="addon-price">+$50</span>
-            </li>
-            <li class="addon" data-addon="engine-bay" data-name="Engine bay detail" data-price="35">
-              <svg class="icon"><use href="#i-gauge"></use></svg><span class="addon-name">Engine bay detail</span><span class="addon-price">+$35</span>
+            <li class="addon" data-addon="steam" data-name="Steam clean &amp; sanitize" data-price="40">
+              <svg class="icon"><use href="#i-steam"></use></svg><span class="addon-name">Steam clean &amp; sanitize</span><span class="addon-price">+$40</span>
             </li>
             <li class="addon" data-addon="odor" data-name="Odor elimination" data-price="30">
               <svg class="icon"><use href="#i-wind"></use></svg><span class="addon-name">Odor elimination</span><span class="addon-price">+$30</span>
             </li>
+          </ul>
+
+          <p class="addon-group-label">Outside</p>
+          <ul class="addon-grid">
+            <li class="addon" data-addon="clay-bar" data-name="Clay bar treatment" data-price="40">
+              <svg class="icon"><use href="#i-eraser"></use></svg><span class="addon-name">Clay bar treatment</span><span class="addon-price">+$40</span>
+            </li>
+            <li class="addon" data-addon="water-spots" data-name="Water spot removal" data-price="35">
+              <svg class="icon"><use href="#i-waves"></use></svg><span class="addon-name">Water spot removal</span><span class="addon-price">+$35</span>
+            </li>
+            <li class="addon" data-addon="headlights" data-name="Headlight restoration" data-price="50">
+              <svg class="icon"><use href="#i-sun"></use></svg><span class="addon-name">Headlight restoration</span><span class="addon-price">+$50</span>
+            </li>
             <li class="addon" data-addon="ceramic" data-name="Ceramic spray sealant" data-price="45">
               <svg class="icon"><use href="#i-layers"></use></svg><span class="addon-name">Ceramic spray sealant</span><span class="addon-price">+$45</span>
             </li>
-            <li class="addon" data-addon="trim" data-name="Trim restoration" data-price="30">
-              <svg class="icon"><use href="#i-wand"></use></svg><span class="addon-name">Trim restoration</span><span class="addon-price">+$30</span>
+            <li class="addon" data-addon="trim" data-name="Trim restoration" data-price="25">
+              <svg class="icon"><use href="#i-wand"></use></svg><span class="addon-name">Trim restoration</span><span class="addon-price">+$25</span>
+            </li>
+            <li class="addon" data-addon="engine-bay" data-name="Engine bay detail" data-price="35">
+              <svg class="icon"><use href="#i-gauge"></use></svg><span class="addon-name">Engine bay detail</span><span class="addon-price">+$35</span>
             </li>
           </ul>
           <p class="fine-print">Extra-dirty vehicles can take more time. We always confirm your price before we start.</p>
