@@ -168,12 +168,9 @@
         </span>
       </label>`).join('');
 
-    const today = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    $('#q-date').min = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-
     let vehicleType = null; // body style from vehicles.js when the model is recognized
     let sizeOverridden = false; // the customer picked a different size than the one we matched
+    let showLiveErrors = false;
 
     const selectedPackage = () => packages.find((p) => p.id === form.elements.package.value);
     const selectedAddons = () => $$('input[name="addons"]:checked', form).map((i) => addons.find((a) => a.id === i.value));
@@ -196,6 +193,138 @@
       return { low: roundTo5(total * CONFIG.estimateRange.low), high: roundTo5(total * CONFIG.estimateRange.high) };
     };
     const estimateText = (range) => `${money(range.low)}–${money(range.high)}`;
+
+    /* Week picker: start times come from js/availability.js */
+
+    const availability = window.WD_AVAILABILITY;
+    const weekGrid = $('#q-week-grid');
+    const weekLabel = $('#q-week-label');
+    const weekPrev = $('#q-week-prev');
+    const weekNext = $('#q-week-next');
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let weekOffset = 0;
+    let chosenSlot = null;
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const toMinutes = (hhmm) => {
+      const [h, m] = hhmm.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const slotKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+    const slotTime = (date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+    const slotLabel = (date) => `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+    // How long we need to hold the spot: package time plus a bit more for bigger vehicles.
+    const jobMinutes = () => {
+      const pkg = selectedPackage();
+      const base = pkg ? availability.durations[pkg.id] : 120;
+      return base + (availability.sizeExtraMinutes[size] || 0);
+    };
+
+    const slotsFor = (day) => {
+      const windows = availability.windows[DAY_KEYS[day.getDay()]] || [];
+      const needed = jobMinutes();
+      const earliest = Date.now() + availability.leadTimeHours * 3600000;
+      const out = [];
+      windows.forEach(([from, to]) => {
+        const closes = toMinutes(to) + (availability.graceMinutes || 0);
+        for (let start = toMinutes(from); start + needed <= closes; start += availability.slotStepMinutes) {
+          const when = new Date(day);
+          when.setHours(0, start, 0, 0);
+          if (when.getTime() < earliest) continue;
+          if (availability.booked.includes(slotKey(when))) continue;
+          out.push(when);
+        }
+      });
+      return out;
+    };
+
+    const startOfWeek = (offset) => {
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - day.getDay() + offset * 7);
+      return day;
+    };
+
+    const renderWeek = () => {
+      // A longer job can swallow a slot that was free a moment ago.
+      if (chosenSlot && !slotsFor(new Date(chosenSlot)).some((d) => slotKey(d) === slotKey(chosenSlot))) {
+        chosenSlot = null;
+      }
+
+      const start = startOfWeek(weekOffset);
+      const todayStamp = new Date().toDateString();
+
+      weekGrid.replaceChildren(...Array.from({ length: 7 }, (_, i) => {
+        const day = new Date(start);
+        day.setDate(start.getDate() + i);
+
+        const col = document.createElement('div');
+        col.className = 'day';
+        if (day.toDateString() === todayStamp) col.classList.add('day--today');
+
+        const head = document.createElement('p');
+        head.className = 'day-head';
+        const name = document.createElement('span');
+        name.className = 'day-name';
+        name.textContent = DAY_NAMES[day.getDay()];
+        const num = document.createElement('span');
+        num.className = 'day-num';
+        num.textContent = day.getDate();
+        head.append(name, num);
+
+        const list = document.createElement('div');
+        list.className = 'day-slots';
+        const slots = slotsFor(day);
+
+        if (!slots.length) {
+          col.classList.add('day--past');
+          const none = document.createElement('span');
+          none.className = 'day-empty';
+          none.textContent = '–';
+          none.title = 'No openings';
+          list.append(none);
+        } else {
+          slots.forEach((when) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'slot';
+            btn.textContent = slotTime(when);
+            btn.setAttribute('aria-label', slotLabel(when));
+            if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) {
+              btn.classList.add('is-chosen');
+              btn.setAttribute('aria-pressed', 'true');
+            }
+            btn.addEventListener('click', () => {
+              chosenSlot = when;
+              renderWeek();
+              if (showLiveErrors) renderErrors();
+            });
+            list.append(btn);
+          });
+        }
+
+        col.append(head, list);
+        return col;
+      }));
+
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const fmt = { month: 'short', day: 'numeric' };
+      weekLabel.textContent = `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`;
+      weekPrev.disabled = weekOffset <= 0;
+      weekNext.disabled = weekOffset >= availability.weeksAhead;
+    };
+
+    weekPrev.addEventListener('click', () => {
+      weekOffset = Math.max(0, weekOffset - 1);
+      renderWeek();
+    });
+    weekNext.addEventListener('click', () => {
+      weekOffset = Math.min(availability.weeksAhead, weekOffset + 1);
+      renderWeek();
+    });
 
     const setMatch = (strong, rest, matched) => {
       const parts = strong ? [Object.assign(document.createElement('strong'), { textContent: strong }), ` ${rest}`] : [rest];
@@ -235,6 +364,7 @@
     onSizeChange = (manual) => {
       if (manual) sizeOverridden = Boolean(vehicleType) && vehicles.types[vehicleType].size !== size;
       refreshVehicle();
+      renderWeek();
     };
 
     makeSelect.addEventListener('change', () => {
@@ -262,6 +392,7 @@
 
     form.addEventListener('change', (e) => {
       if (['package', 'addons', 'condition'].includes(e.target.name)) refreshVehicle();
+      if (e.target.name === 'package') renderWeek(); // job length changed, so the openings change
     });
 
     /* Validation */
@@ -269,6 +400,7 @@
     const errors = {
       vehicle: $('#err-vehicle'),
       package: $('#err-package'),
+      slot: $('#err-slot'),
       name: $('#err-name'),
       phone: $('#err-phone'),
       email: $('#err-email'),
@@ -278,7 +410,6 @@
     const phoneInput = $('#q-phone');
     const emailInput = $('#q-email');
     const locationInput = $('#q-location');
-    let showLiveErrors = false;
 
     // Each check returns the element to flag (and focus) when it fails, or null when it passes.
     const checks = () => [
@@ -286,6 +417,7 @@
         || (needsOtherVehicle() && otherInput.value.trim().length < 2 ? otherInput : null),
       'Pick your vehicle’s year, make, and model.'],
       ['package', selectedPackage() ? null : $('input[name="package"]', form), 'Pick a package to continue.'],
+      ['slot', chosenSlot ? null : ($('.slot', weekGrid) || weekNext), 'Pick a start time that works for you.'],
       ['name', nameInput.value.trim().length >= 2 ? null : nameInput, 'Please enter your name.'],
       ['phone', phoneInput.value.replace(/\D/g, '').length >= 10 ? null : phoneInput, 'Please enter a phone number we can text.'],
       ['email', !emailInput.value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim()) ? null : emailInput, 'That email doesn’t look quite right.'],
@@ -299,7 +431,7 @@
         errors[key].textContent = el ? message : '';
         errors[key].hidden = !el;
         if (el) {
-          el.setAttribute('aria-invalid', 'true');
+          if (!el.classList.contains('slot')) el.setAttribute('aria-invalid', 'true');
           first = first || el;
         }
       });
@@ -316,13 +448,10 @@
       if (!radio) return;
       radio.checked = true;
       refreshVehicle();
+      renderWeek();
     }));
 
     /* Submitting */
-
-    const formatDate = (iso) => (iso
-      ? new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      : 'Flexible');
 
     const collect = () => {
       const type = vehicleType && vehicles.types[vehicleType];
@@ -334,17 +463,17 @@
         addons: selectedAddons().map((a) => a.name),
         condition: selectedCondition()?.dataset.label || 'Average',
         estimate: estimateText(estimate()),
+        slot: chosenSlot ? slotLabel(chosenSlot) : 'Flexible',
         name: nameInput.value.trim(),
         phone: phoneInput.value.trim(),
         email: emailInput.value.trim(),
         location: locationInput.value.trim(),
-        date: $('#q-date').value,
-        time: $('#q-time').value,
         notes: $('#q-notes').value.trim(),
       };
     };
 
     const summaryRows = (d) => [
+      ['Requested', d.slot],
       ['Vehicle', `${d.vehicle} (${d.size})`],
       ['Package', d.package],
       ['Add-ons', d.addons.length ? d.addons.join(', ') : 'None'],
@@ -354,8 +483,6 @@
       ['Phone', d.phone],
       ...(d.email ? [['Email', d.email]] : []),
       ['Location', d.location],
-      ['Preferred date', formatDate(d.date)],
-      ['Best time', d.time],
       ...(d.notes ? [['Notes', d.notes]] : []),
     ];
 
@@ -370,6 +497,7 @@
       name: d.name,
       phone: d.phone,
       ...(d.email ? { email: d.email } : {}),
+      requested_time: d.slot,
       vehicle: d.vehicle,
       vehicle_type: d.vehicleType,
       vehicle_size: d.size,
@@ -378,10 +506,8 @@
       condition: d.condition,
       estimate: d.estimate,
       location: d.location,
-      preferred_date: formatDate(d.date),
-      best_time: d.time,
       notes: d.notes || 'None',
-      _subject: `Quote request: ${d.vehicle}, ${d.package} (${d.estimate})`,
+      _subject: `Booking request: ${d.slot} — ${d.vehicle}, ${d.package} (${d.estimate})`,
     });
 
     const result = $('#quote-result');
@@ -399,10 +525,10 @@
       const sent = mode === 'sent';
       $('#quote-result-title').textContent = sent ? `Request sent. Thanks, ${firstName}!` : `Almost done, ${firstName}.`;
       $('#quote-result-text').textContent = sent
-        ? `We’ll reach out at ${d.phone} to confirm your exact price and a time.`
+        ? `We’ll text you at ${d.phone} to confirm ${d.slot} and your exact price.`
         : mode === 'failed'
           ? 'We couldn’t send your request automatically. Tap below to text it to us instead.'
-          : 'Tap below to text your request to us. We’ll confirm your exact price and a time.';
+          : 'Tap below to text your request to us. We’ll confirm the time and your exact price.';
       $('#quote-summary').replaceChildren(...summaryRows(d).map(([label, value]) => {
         const row = document.createElement('div');
         const dt = document.createElement('dt');
@@ -428,6 +554,7 @@
       if (firstInvalid) {
         status.textContent = 'Please fix the highlighted fields.';
         firstInvalid.focus();
+        firstInvalid.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
         return;
       }
       status.textContent = '';
@@ -476,11 +603,13 @@
       if (lastMode === 'sent') {
         form.reset();
         showLiveErrors = false;
-        renderErrors();
-        Object.values(errors).forEach((el) => { el.hidden = true; });
+        chosenSlot = null;
+        weekOffset = 0;
+        Object.values(errors).forEach((el) => { el.hidden = true; el.textContent = ''; });
         $$('[aria-invalid="true"]', form).forEach((el) => el.removeAttribute('aria-invalid'));
         makeSelect.dispatchEvent(new Event('change'));
         setSize((sizeInputs.find((input) => input.defaultChecked) || sizeInputs[0]).value);
+        renderWeek();
       }
       result.hidden = true;
       form.hidden = false;
@@ -488,6 +617,7 @@
     });
 
     refreshVehicle();
+    renderWeek();
   }
 
   setSize(size);

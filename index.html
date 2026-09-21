@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <script>document.documentElement.classList.replace('no-js', 'js');</script>
   <script src="js/vehicles.js" defer></script>
+  <script src="js/availability.js" defer></script>
   <script src="js/main.js" defer></script>
 
   <script type="application/ld+json">
@@ -724,8 +725,27 @@
               <p class="estimate-note" id="q-estimate-note">Pick a package to see your estimate.</p>
             </div>
 
+            <!-- Openings come from js/availability.js. Edit the windows there to change what shows up. -->
             <div class="form-step">
-              <p class="form-step-title"><span class="form-step-num">3</span>Your info</p>
+              <p class="form-step-title"><span class="form-step-num">3</span>Pick a time</p>
+              <div class="week" id="q-week">
+                <div class="week-head">
+                  <button class="week-nav" id="q-week-prev" type="button" aria-label="Previous week">
+                    <svg class="icon"><use href="#i-chevron-left"></use></svg>
+                  </button>
+                  <p class="week-label" id="q-week-label" aria-live="polite"></p>
+                  <button class="week-nav" id="q-week-next" type="button" aria-label="Next week">
+                    <svg class="icon"><use href="#i-chevron-right"></use></svg>
+                  </button>
+                </div>
+                <div class="week-grid" id="q-week-grid"></div>
+                <p class="week-note">These are our open start times. We’ll text you to confirm the spot before it’s locked in.</p>
+              </div>
+              <p class="field-error" id="err-slot" hidden></p>
+            </div>
+
+            <div class="form-step">
+              <p class="form-step-title"><span class="form-step-num">4</span>Your info</p>
               <div class="form-row form-row--2">
                 <div class="field">
                   <label for="q-name">Name</label>
@@ -748,21 +768,6 @@
                   <label for="q-location">Where’s the vehicle?</label>
                   <input class="input" id="q-location" name="location" type="text" placeholder="Town or ZIP" autocomplete="address-level2" aria-describedby="err-location" required>
                   <p class="field-error" id="err-location" hidden></p>
-                </div>
-              </div>
-              <div class="form-row form-row--2">
-                <div class="field">
-                  <label for="q-date">Preferred date <span class="optional">Optional</span></label>
-                  <input class="input" id="q-date" name="date" type="date">
-                </div>
-                <div class="field">
-                  <label for="q-time">Best time to reach you</label>
-                  <select class="input select" id="q-time" name="time">
-                    <option>Anytime</option>
-                    <option>Morning</option>
-                    <option>Afternoon</option>
-                    <option>Evening</option>
-                  </select>
                 </div>
               </div>
               <div class="field">
