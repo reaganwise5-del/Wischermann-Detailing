@@ -133,8 +133,12 @@
   <main id="main">
 
     <!-- ========== Hero ========== -->
-    <section class="hero" id="home" aria-labelledby="hero-title">
-      <div class="hero-bg" aria-hidden="true"></div>
+    <!-- Hero background: remove the hero--video class (and the <video> below) to go back to the logo artwork. -->
+    <section class="hero hero--video" id="home" aria-labelledby="hero-title">
+      <div class="hero-bg" aria-hidden="true">
+        <video class="hero-video" src="images/work/hero-clip.mp4" poster="images/work/hero-poster.jpg" autoplay muted loop playsinline preload="metadata"></video>
+        <span class="hero-scrim"></span>
+      </div>
 
       <div class="container hero-inner">
         <div class="hero-copy">

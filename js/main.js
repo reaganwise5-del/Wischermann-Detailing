@@ -518,7 +518,15 @@
     sync();
   });
 
-  /* ---------- Work videos ---------- */
+  /* ---------- Video ---------- */
+
+  // Nothing plays on its own for visitors who prefer reduced motion; posters stay put.
+  if (reduceMotion.matches) {
+    $$('video[autoplay]').forEach((video) => {
+      video.removeAttribute('autoplay');
+      video.pause();
+    });
+  }
 
   $$('.work-item--video').forEach((tile) => {
     const video = $('video', tile);

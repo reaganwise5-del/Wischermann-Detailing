@@ -268,6 +268,18 @@ dl, dd { margin: 0; }
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / .08), transparent);
 }
 
+/* Video (or photo) behind the hero, with a scrim so the headline stays readable. */
+.hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hero-scrim {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(60% 60% at 78% 38%, rgb(var(--brand-glow) / .22), transparent 70%),
+    linear-gradient(90deg, rgb(0 0 0 / .94) 0%, rgb(0 0 0 / .8) 42%, rgb(0 0 0 / .42) 100%),
+    linear-gradient(180deg, rgb(0 0 0 / .85) 0%, transparent 28%, transparent 55%, #000 100%);
+}
+.hero--video .hero-bg { background: #000; }
+.hero--video .hero-art { display: none; }
+
 .hero-inner { display: grid; gap: 28px; align-items: center; }
 .hero-copy { container-type: inline-size; }
 
@@ -346,6 +358,8 @@ dl, dd { margin: 0; }
 @media (min-width: 960px) {
   .hero { min-height: min(100svh, 920px); display: flex; align-items: center; padding-bottom: 96px; }
   .hero-inner { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 40px; }
+  .hero--video .hero-inner { grid-template-columns: minmax(0, 1fr); }
+  .hero--video .hero-copy { max-width: 46rem; }
   .hero-art { order: 0; }
   .hero-stage { width: min(100%, 520px); padding-top: 0; }
   .hero-actions .btn { flex: 0 0 auto; }
