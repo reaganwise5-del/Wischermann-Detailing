@@ -729,6 +729,7 @@
             <div class="form-step">
               <p class="form-step-title"><span class="form-step-num">3</span>Pick a time</p>
               <div class="week" id="q-week">
+                <div class="quick" id="q-quick" hidden></div>
                 <div class="week-head">
                   <button class="week-nav" id="q-week-prev" type="button" aria-label="Previous week">
                     <svg class="icon"><use href="#i-chevron-left"></use></svg>
@@ -738,7 +739,8 @@
                     <svg class="icon"><use href="#i-chevron-right"></use></svg>
                   </button>
                 </div>
-                <div class="week-list" id="q-week-list" aria-live="polite"></div>
+                <div class="week-days" id="q-week-days"></div>
+                <div class="week-times" id="q-week-times" aria-live="polite"></div>
                 <p class="week-note" id="q-week-note">These are our open start times. We’ll text you to confirm the spot before it’s locked in.</p>
               </div>
               <p class="field-error" id="err-slot" hidden></p>
