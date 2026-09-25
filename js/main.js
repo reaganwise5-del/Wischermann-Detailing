@@ -197,18 +197,15 @@
     /* Time picker: pick a day, then a time. Start times come from js/availability.js. */
 
     const availability = window.WD_AVAILABILITY;
-    const weekDays = $('#q-week-days');
-    const weekTimes = $('#q-week-times');
+    const weekList = $('#q-week-list');
+    const weekNote = $('#q-week-note');
     const weekLabel = $('#q-week-label');
     const weekPrev = $('#q-week-prev');
     const weekNext = $('#q-week-next');
     const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    // Times are shown in these bands so a day never turns into one long list.
-    const BANDS = [['Morning', 0, 12 * 60], ['Afternoon', 12 * 60, 17 * 60], ['Evening', 17 * 60, 24 * 60]];
     let weekOffset = 0;
     let chosenSlot = null;
-    let activeDay = null;
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const toMinutes = (hhmm) => {
@@ -303,71 +300,65 @@
 
     const sameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
 
-    const renderTimes = (day, slots) => {
-      if (!day) {
-        weekTimes.replaceChildren(Object.assign(document.createElement('p'), {
-          className: 'times-empty',
-          textContent: 'Nothing open this week — try the arrow for next week.',
-        }));
-        return;
-      }
+    // Rows get long on a busy Saturday, so hold back the tail behind a "+N more".
+    const VISIBLE_SLOTS = 5;
+    const expanded = new Set();
 
-      const head = document.createElement('div');
-      head.className = 'times-head';
-      const title = document.createElement('p');
-      title.className = 'times-day';
-      title.textContent = day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-      const meta = document.createElement('p');
-      meta.className = 'times-meta';
-      meta.textContent = slots.length
-        ? `${slots.length} open · about ${lengthText(jobMinutes())}`
-        : 'No openings';
-      head.append(title, meta);
+    const renderRow = (day, slots) => {
+      const row = document.createElement('div');
+      row.className = 'wrow';
+      if (!slots.length) row.classList.add('is-empty');
+      if (sameDay(day, new Date())) row.classList.add('wrow--today');
 
-      const body = document.createElement('div');
-      body.className = 'times-body';
+      const label = document.createElement('p');
+      label.className = 'wrow-day';
+      label.append(
+        Object.assign(document.createElement('span'), { className: 'wrow-name', textContent: DAY_NAMES[day.getDay()] }),
+        Object.assign(document.createElement('span'), { className: 'wrow-num', textContent: day.getDate() }),
+      );
+
+      const times = document.createElement('div');
+      times.className = 'wrow-times';
 
       if (!slots.length) {
-        body.append(Object.assign(document.createElement('p'), {
-          className: 'times-empty',
-          textContent: 'Nothing open this day. Pick another day above, or text us and we’ll work you in.',
-        }));
+        times.append(Object.assign(document.createElement('p'), { className: 'wrow-none', textContent: 'Booked up' }));
       } else {
-        BANDS.forEach(([label, from, to]) => {
-          const inBand = slots.filter((when) => {
-            const mins = when.getHours() * 60 + when.getMinutes();
-            return mins >= from && mins < to;
-          });
-          if (!inBand.length) return;
+        const key = day.toDateString();
+        const showAll = expanded.has(key) || slots.length <= VISIBLE_SLOTS + 1;
+        const shown = showAll ? slots : slots.slice(0, VISIBLE_SLOTS);
 
-          const band = document.createElement('div');
-          band.className = 'times-band';
-          band.append(Object.assign(document.createElement('p'), { className: 'times-band-label', textContent: label }));
-
-          const row = document.createElement('div');
-          row.className = 'times-row';
-          inBand.forEach((when) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'slot';
-            btn.textContent = slotTime(when);
-            btn.setAttribute('aria-label', slotLabel(when));
-            btn.setAttribute('aria-pressed', chosenSlot && slotKey(chosenSlot) === slotKey(when) ? 'true' : 'false');
-            if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) btn.classList.add('is-chosen');
-            btn.addEventListener('click', () => {
-              chosenSlot = when;
-              activeDay = new Date(when);
-              renderWeek();
-              if (showLiveErrors) renderErrors();
-            });
-            row.append(btn);
+        shown.forEach((when) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'slot';
+          btn.textContent = slotTime(when);
+          btn.setAttribute('aria-label', slotLabel(when));
+          btn.setAttribute('aria-pressed', chosenSlot && slotKey(chosenSlot) === slotKey(when) ? 'true' : 'false');
+          if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) btn.classList.add('is-chosen');
+          btn.addEventListener('click', () => {
+            chosenSlot = when;
+            renderWeek();
+            if (showLiveErrors) renderErrors();
           });
-          band.append(row);
-          body.append(band);
+          times.append(btn);
         });
+
+        if (!showAll) {
+          const more = document.createElement('button');
+          more.type = 'button';
+          more.className = 'slot slot--more';
+          more.textContent = `+${slots.length - VISIBLE_SLOTS}`;
+          more.setAttribute('aria-label', `Show ${slots.length - VISIBLE_SLOTS} more times on ${day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`);
+          more.addEventListener('click', () => {
+            expanded.add(key);
+            renderWeek();
+          });
+          times.append(more);
+        }
       }
 
-      weekTimes.replaceChildren(head, body);
+      row.append(label, times);
+      return row;
     };
 
     const renderWeek = () => {
@@ -375,44 +366,20 @@
       if (chosenSlot && !slotsFor(new Date(chosenSlot)).some((d) => slotKey(d) === slotKey(chosenSlot))) {
         chosenSlot = null;
       }
-      if (chosenSlot) activeDay = new Date(chosenSlot);
 
       const start = startOfWeek(weekOffset);
-      const today = new Date();
       const days = Array.from({ length: 7 }, (_, i) => {
         const date = new Date(start);
         date.setDate(start.getDate() + i);
         return { date, slots: slotsFor(date) };
       });
 
-      // Land on a day with something on it rather than an empty Sunday.
-      let current = days.find((d) => sameDay(d.date, activeDay));
-      if (!current || !current.slots.length) current = days.find((d) => d.slots.length) || null;
-      activeDay = current ? current.date : null;
+      weekList.replaceChildren(...days.map(({ date, slots }) => renderRow(date, slots)));
 
-      weekDays.replaceChildren(...days.map(({ date, slots }) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'day';
-        btn.disabled = !slots.length;
-        if (sameDay(date, today)) btn.classList.add('day--today');
-        if (sameDay(date, activeDay)) btn.classList.add('is-active');
-        btn.setAttribute('aria-pressed', sameDay(date, activeDay) ? 'true' : 'false');
-        btn.setAttribute('aria-label', `${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — ${slots.length ? `${slots.length} open` : 'nothing open'}`);
-
-        btn.append(
-          Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.getDay()] }),
-          Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.getDate() }),
-          Object.assign(document.createElement('span'), { className: 'day-dot', ariaHidden: 'true' }),
-        );
-        btn.addEventListener('click', () => {
-          activeDay = date;
-          renderWeek();
-        });
-        return btn;
-      }));
-
-      renderTimes(activeDay, current ? current.slots : []);
+      const anyOpen = days.some((d) => d.slots.length);
+      weekNote.textContent = anyOpen
+        ? `Each opening fits your job — about ${lengthText(jobMinutes())}. We’ll text you to confirm the spot before it’s locked in.`
+        : 'Nothing open this week. Try the arrow for next week, or text us and we’ll work you in.';
 
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
@@ -424,12 +391,12 @@
 
     weekPrev.addEventListener('click', () => {
       weekOffset = Math.max(0, weekOffset - 1);
-      activeDay = null;
+      expanded.clear();
       renderWeek();
     });
     weekNext.addEventListener('click', () => {
       weekOffset = Math.min(availability.weeksAhead, weekOffset + 1);
-      activeDay = null;
+      expanded.clear();
       renderWeek();
     });
 
@@ -524,7 +491,7 @@
         || (needsOtherVehicle() && otherInput.value.trim().length < 2 ? otherInput : null),
       'Pick your vehicle’s year, make, and model.'],
       ['package', selectedPackage() ? null : $('input[name="package"]', form), 'Pick a package to continue.'],
-      ['slot', chosenSlot ? null : ($('.slot', weekTimes) || weekNext), 'Pick a start time that works for you.'],
+      ['slot', chosenSlot ? null : ($('.slot', weekList) || weekNext), 'Pick a start time that works for you.'],
       ['name', nameInput.value.trim().length >= 2 ? null : nameInput, 'Please enter your name.'],
       ['phone', phoneInput.value.replace(/\D/g, '').length >= 10 ? null : phoneInput, 'Please enter a phone number we can text.'],
       ['email', !emailInput.value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim()) ? null : emailInput, 'That email doesn’t look quite right.'],
@@ -693,7 +660,7 @@
           showLiveErrors = true;
           renderErrors();
           status.textContent = 'Sorry — that spot was just booked. Please pick another time.';
-          weekTimes.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
+          weekList.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
           return;
         }
 
