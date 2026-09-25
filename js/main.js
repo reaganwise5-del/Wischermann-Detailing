@@ -931,68 +931,40 @@
         return row;
       };
 
-      const countFor = (key) => {
-        const set = data.sources[key] || {};
-        if (Number(set.count) > 0) return Number(set.count);
-        return data.list.filter((r) => r.source === key).length;
-      };
-
+      // The panel asks for a review rather than counting them.
       const renderScore = () => {
         const google = data.sources.google || {};
         const parts = [];
 
-        const head = document.createElement('div');
-        head.className = 'score-head';
-
         if (google.rating) {
-          head.append(
-            sourceMark('google'),
-            Object.assign(document.createElement('p'), { className: 'score-number', textContent: Number(google.rating).toFixed(1) }),
+          const score = document.createElement('div');
+          score.className = 'score-rating';
+          score.append(
             stars(google.rating),
-            Object.assign(document.createElement('p'), { className: 'score-count', textContent: `${countFor('google')} Google reviews` }),
+            Object.assign(document.createElement('p'), { className: 'score-number', textContent: `${Number(google.rating).toFixed(1)} on Google` }),
           );
-        } else {
-          const total = data.list.length;
-          head.append(
-            Object.assign(document.createElement('p'), { className: 'score-eyebrow', textContent: 'What people say' }),
-            Object.assign(document.createElement('p'), { className: 'score-number', textContent: total }),
-            Object.assign(document.createElement('p'), { className: 'score-count', textContent: total === 1 ? 'review from a neighbor' : 'reviews from neighbors' }),
-          );
+          parts.push(score);
         }
-        parts.push(head);
 
-        const links = document.createElement('div');
-        links.className = 'score-links';
-        if (google.url) {
-          const see = document.createElement('a');
-          see.className = 'btn btn-ghost score-link';
-          see.href = google.url;
-          see.target = '_blank';
-          see.rel = 'noopener';
-          see.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'See us on Google' }));
-          links.append(see);
-        }
-        if (google.writeUrl && !google.writeUrl.endsWith('=')) {
-          const write = document.createElement('a');
-          write.className = 'score-write';
-          write.href = google.writeUrl;
-          write.target = '_blank';
-          write.rel = 'noopener';
-          write.textContent = 'Leave a review';
-          links.append(write);
-        }
-        if (links.children.length) parts.push(links);
+        const pitch = document.createElement('div');
+        pitch.className = 'score-pitch';
+        pitch.append(
+          Object.assign(document.createElement('p'), { className: 'score-eyebrow', textContent: 'Reviews mean everything' }),
+          Object.assign(document.createElement('p'), { className: 'score-title', textContent: 'Had us out? Tell people.' }),
+          Object.assign(document.createElement('p'), { className: 'score-copy', textContent: 'We’re a young crew building this one car at a time. If we did right by yours, a review on Google does more for us than anything else.' }),
+        );
+        parts.push(pitch);
 
-        const tally = document.createElement('ul');
-        tally.className = 'score-tally';
-        Object.keys(data.sources).forEach((key) => {
-          const n = countFor(key);
-          if (!n) return;
-          const row = document.createElement('li');
-          row.append(sourceMark(key), Object.assign(document.createElement('span'), { className: 'tally-n', textContent: n }));
-          tally.append(row);
-        });
-        if (tally.children.length > 1) parts.push(tally);
+        const target = google.writeUrl && !google.writeUrl.endsWith('=') ? google.writeUrl : google.url;
+        if (target) {
+          const cta = document.createElement('a');
+          cta.className = 'btn btn-primary score-link';
+          cta.href = target;
+          cta.target = '_blank';
+          cta.rel = 'noopener';
+          cta.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'Review us on Google' }));
+          parts.push(cta);
+        }
 
         scoreBox.replaceChildren(...parts);
       };

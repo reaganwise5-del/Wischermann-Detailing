@@ -12,17 +12,15 @@ window.WD_REVIEWS = {
       name: 'Google',
       // Your Google business profile — the link the Share button gives you.
       url: 'https://share.google/CcHpPjaMXIDrGmY3s',
-      // Same profile; Google opens it with the star picker already showing.
-      writeUrl: 'https://search.google.com/local/writereview?placeid=',
-      // Fill these two in from your profile and the score panel switches on.
+      // Optional: a link that opens Google with the star picker already showing.
+      writeUrl: '',
+      // Optional: your star rating. Set it and the stars appear above the ask.
+      // The number of reviews is never shown.
       rating: null,
-      count: null,
     },
     nextdoor: {
       name: 'Nextdoor',
       url: '',
-      rating: null,
-      count: null, // left blank, so it counts the Nextdoor reviews below
     },
   },
 
