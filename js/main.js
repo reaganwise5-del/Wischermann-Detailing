@@ -887,6 +887,153 @@
     sync();
   });
 
+  /* ---------- Reviews ---------- */
+
+  {
+    const data = window.WD_REVIEWS;
+    const scoreBox = $('#review-score');
+    const feedBox = $('#review-feed');
+
+    if (data && scoreBox && feedBox) {
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const icon = (id, className) => {
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('class', className);
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS(svgNS, 'use');
+        use.setAttribute('href', `#${id}`);
+        svg.append(use);
+        return svg;
+      };
+
+      // Nextdoor's own mark isn't ours to ship, so the name stands in for it.
+      const sourceMark = (key) => {
+        const wrap = document.createElement('span');
+        wrap.className = `mark mark--${key}`;
+        if (key === 'google') {
+          wrap.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'Google' }));
+        } else {
+          wrap.append(Object.assign(document.createElement('span'), { className: 'mark-word', textContent: 'Nextdoor' }));
+        }
+        return wrap;
+      };
+
+      const stars = (rating) => {
+        const row = document.createElement('span');
+        row.className = 'stars';
+        row.setAttribute('role', 'img');
+        row.setAttribute('aria-label', `${rating} out of 5 stars`);
+        for (let i = 0; i < 5; i++) {
+          const star = icon('i-star', 'star');
+          if (i >= Math.round(rating)) star.classList.add('star--off');
+          row.append(star);
+        }
+        return row;
+      };
+
+      const countFor = (key) => {
+        const set = data.sources[key] || {};
+        if (Number(set.count) > 0) return Number(set.count);
+        return data.list.filter((r) => r.source === key).length;
+      };
+
+      const renderScore = () => {
+        const google = data.sources.google || {};
+        const parts = [];
+
+        const head = document.createElement('div');
+        head.className = 'score-head';
+
+        if (google.rating) {
+          head.append(
+            sourceMark('google'),
+            Object.assign(document.createElement('p'), { className: 'score-number', textContent: Number(google.rating).toFixed(1) }),
+            stars(google.rating),
+            Object.assign(document.createElement('p'), { className: 'score-count', textContent: `${countFor('google')} Google reviews` }),
+          );
+        } else {
+          const total = data.list.length;
+          head.append(
+            Object.assign(document.createElement('p'), { className: 'score-eyebrow', textContent: 'What people say' }),
+            Object.assign(document.createElement('p'), { className: 'score-number', textContent: total }),
+            Object.assign(document.createElement('p'), { className: 'score-count', textContent: total === 1 ? 'review from a neighbor' : 'reviews from neighbors' }),
+          );
+        }
+        parts.push(head);
+
+        const links = document.createElement('div');
+        links.className = 'score-links';
+        if (google.url) {
+          const see = document.createElement('a');
+          see.className = 'btn btn-ghost score-link';
+          see.href = google.url;
+          see.target = '_blank';
+          see.rel = 'noopener';
+          see.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'See us on Google' }));
+          links.append(see);
+        }
+        if (google.writeUrl && !google.writeUrl.endsWith('=')) {
+          const write = document.createElement('a');
+          write.className = 'score-write';
+          write.href = google.writeUrl;
+          write.target = '_blank';
+          write.rel = 'noopener';
+          write.textContent = 'Leave a review';
+          links.append(write);
+        }
+        if (links.children.length) parts.push(links);
+
+        const tally = document.createElement('ul');
+        tally.className = 'score-tally';
+        Object.keys(data.sources).forEach((key) => {
+          const n = countFor(key);
+          if (!n) return;
+          const row = document.createElement('li');
+          row.append(sourceMark(key), Object.assign(document.createElement('span'), { className: 'tally-n', textContent: n }));
+          tally.append(row);
+        });
+        if (tally.children.length > 1) parts.push(tally);
+
+        scoreBox.replaceChildren(...parts);
+      };
+
+      const renderFeed = () => {
+        const ordered = data.list.slice().sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+
+        feedBox.replaceChildren(...ordered.map((review) => {
+          const card = document.createElement('figure');
+          card.className = 'review';
+          if (review.featured) card.classList.add('review--featured');
+
+          const top = document.createElement('div');
+          top.className = 'review-top';
+          top.append(sourceMark(review.source));
+          if (review.rating) top.append(stars(review.rating));
+
+          const quote = document.createElement('blockquote');
+          quote.append(Object.assign(document.createElement('p'), { textContent: review.text }));
+
+          const cap = document.createElement('figcaption');
+          const who = document.createElement('span');
+          who.append(
+            Object.assign(document.createElement('span'), { className: 'review-name', textContent: review.name }),
+            Object.assign(document.createElement('span'), { className: 'review-source', textContent: review.place || data.sources[review.source].name }),
+          );
+          cap.append(
+            Object.assign(document.createElement('span'), { className: 'review-avatar', textContent: review.name.trim().charAt(0), ariaHidden: 'true' }),
+            who,
+          );
+
+          card.append(top, quote, cap);
+          return card;
+        }));
+      };
+
+      renderScore();
+      renderFeed();
+    }
+  }
+
   /* ---------- Photo lightbox ---------- */
 
   const lightbox = $('#lightbox');
