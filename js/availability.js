@@ -29,7 +29,14 @@ window.WD_AVAILABILITY = {
   durations: { exterior: 90, interior: 120, full: 180 },
   sizeExtraMinutes: { car: 0, suv: 30, truck: 45 },
 
-  // Times already taken or blocked off. Format: 'YYYY-MM-DDTHH:MM'.
-  // Add one here and it disappears from the site, e.g. '2026-09-23T17:30'.
+  // Where bookings made on the site are kept, so a spot someone takes disappears for everyone.
+  // Set this to null to turn that off and rely on the hand-written list below.
+  apiPath: '/api/slots',
+
+  // How long a blocked time keeps the calendar busy when no length is given.
+  blockMinutes: 180,
+
+  // Times you want blocked off by hand. Format: 'YYYY-MM-DDTHH:MM', or ['2026-09-23T17:30', 90]
+  // to block a specific number of minutes. Anything booked through the site is handled for you.
   booked: [],
 };

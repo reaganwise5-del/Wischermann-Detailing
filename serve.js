@@ -23,7 +23,37 @@ const types = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// Stand-in for the /api/slots function on Vercel, so booking can be tested locally.
+const store = path.join(root, '.dev-bookings.json');
+const readStore = () => {
+  try { return JSON.parse(fs.readFileSync(store, 'utf8')); } catch { return []; }
+};
+
+const handleSlots = (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const json = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+  if (req.method === 'GET') return json(200, { booked: readStore(), storage: true });
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
+
+  let body = '';
+  req.on('data', (chunk) => { body += chunk; });
+  req.on('end', () => {
+    try {
+      const { slot, minutes } = JSON.parse(body || '{}');
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(slot || '')) return json(400, { ok: false });
+      const list = readStore();
+      if (!list.some((entry) => entry.slot === slot)) list.push({ slot, minutes: Number(minutes) || 180, at: new Date().toISOString() });
+      fs.writeFileSync(store, JSON.stringify(list, null, 2));
+      json(200, { ok: true, storage: true, booked: list });
+    } catch {
+      json(400, { ok: false });
+    }
+  });
+};
+
 http.createServer((req, res) => {
+  if (req.url.split('?')[0] === '/api/slots') return handleSlots(req, res);
+
   let urlPath = '/';
   try { urlPath = decodeURIComponent(req.url.split('?')[0]); } catch {}
   if (urlPath.endsWith('/')) urlPath += 'index.html';

@@ -194,17 +194,21 @@
     };
     const estimateText = (range) => `${money(range.low)}–${money(range.high)}`;
 
-    /* Week picker: start times come from js/availability.js */
+    /* Time picker: pick a day, then a time. Start times come from js/availability.js. */
 
     const availability = window.WD_AVAILABILITY;
-    const weekGrid = $('#q-week-grid');
+    const weekDays = $('#q-week-days');
+    const weekTimes = $('#q-week-times');
     const weekLabel = $('#q-week-label');
     const weekPrev = $('#q-week-prev');
     const weekNext = $('#q-week-next');
     const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Times are shown in these bands so a day never turns into one long list.
+    const BANDS = [['Morning', 0, 12 * 60], ['Afternoon', 12 * 60, 17 * 60], ['Evening', 17 * 60, 24 * 60]];
     let weekOffset = 0;
     let chosenSlot = null;
+    let activeDay = null;
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const toMinutes = (hhmm) => {
@@ -214,12 +218,62 @@
     const slotKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
     const slotTime = (date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
     const slotLabel = (date) => `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    const lengthText = (mins) => (mins % 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min` : `${mins / 60} hr`);
 
     // How long we need to hold the spot: package time plus a bit more for bigger vehicles.
     const jobMinutes = () => {
       const pkg = selectedPackage();
       const base = pkg ? availability.durations[pkg.id] : 120;
       return base + (availability.sizeExtraMinutes[size] || 0);
+    };
+
+    /* Spots that are already taken — from availability.js and from other people's bookings. */
+
+    let takenLocal = [];   // blocked by hand in availability.js
+    let takenShared = [];  // booked through the site by someone else
+
+    const parseSlot = (value) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(value || '').trim());
+      return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+    };
+
+    // Accepts '2026-09-26T13:30', ['2026-09-26T13:30', 120], or { slot, minutes }.
+    const toBusy = (entry) => {
+      const raw = Array.isArray(entry) ? entry[0] : (entry && typeof entry === 'object' ? entry.slot : entry);
+      const mins = Array.isArray(entry) ? entry[1] : (entry && typeof entry === 'object' ? entry.minutes : null);
+      const start = parseSlot(raw);
+      if (!start) return null;
+      const length = Number(mins) > 0 ? Number(mins) : (availability.blockMinutes || 180);
+      return { start: start.getTime(), end: start.getTime() + length * 60000 };
+    };
+
+    takenLocal = (availability.booked || []).map(toBusy).filter(Boolean);
+
+    // A start time is out if the job would run over something already on the books.
+    const isTaken = (when, needed) => {
+      const from = when.getTime();
+      const to = from + needed * 60000;
+      return takenLocal.concat(takenShared).some((busy) => from < busy.end && to > busy.start);
+    };
+
+    const loadShared = async () => {
+      if (!availability.apiPath) return false;
+      const res = await fetch(availability.apiPath, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`Slots endpoint responded with ${res.status}`);
+      const data = await res.json();
+      takenShared = (data.booked || []).map(toBusy).filter(Boolean);
+      return data.storage === true;
+    };
+
+    // Tell the site a spot is gone so it stops showing up for everyone else.
+    const holdSlot = async (when, needed) => {
+      if (!availability.apiPath || !when) return;
+      await fetch(availability.apiPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ slot: slotKey(when), minutes: needed }),
+      });
+      takenShared.push({ start: when.getTime(), end: when.getTime() + needed * 60000 });
     };
 
     const slotsFor = (day) => {
@@ -233,7 +287,7 @@
           const when = new Date(day);
           when.setHours(0, start, 0, 0);
           if (when.getTime() < earliest) continue;
-          if (availability.booked.includes(slotKey(when))) continue;
+          if (isTaken(when, needed)) continue;
           out.push(when);
         }
       });
@@ -247,67 +301,118 @@
       return day;
     };
 
-    const renderWeek = () => {
-      // A longer job can swallow a slot that was free a moment ago.
-      if (chosenSlot && !slotsFor(new Date(chosenSlot)).some((d) => slotKey(d) === slotKey(chosenSlot))) {
-        chosenSlot = null;
+    const sameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
+
+    const renderTimes = (day, slots) => {
+      if (!day) {
+        weekTimes.replaceChildren(Object.assign(document.createElement('p'), {
+          className: 'times-empty',
+          textContent: 'Nothing open this week — try the arrow for next week.',
+        }));
+        return;
       }
 
-      const start = startOfWeek(weekOffset);
-      const todayStamp = new Date().toDateString();
+      const head = document.createElement('div');
+      head.className = 'times-head';
+      const title = document.createElement('p');
+      title.className = 'times-day';
+      title.textContent = day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+      const meta = document.createElement('p');
+      meta.className = 'times-meta';
+      meta.textContent = slots.length
+        ? `${slots.length} open · about ${lengthText(jobMinutes())}`
+        : 'No openings';
+      head.append(title, meta);
 
-      weekGrid.replaceChildren(...Array.from({ length: 7 }, (_, i) => {
-        const day = new Date(start);
-        day.setDate(start.getDate() + i);
+      const body = document.createElement('div');
+      body.className = 'times-body';
 
-        const col = document.createElement('div');
-        col.className = 'day';
-        if (day.toDateString() === todayStamp) col.classList.add('day--today');
+      if (!slots.length) {
+        body.append(Object.assign(document.createElement('p'), {
+          className: 'times-empty',
+          textContent: 'Nothing open this day. Pick another day above, or text us and we’ll work you in.',
+        }));
+      } else {
+        BANDS.forEach(([label, from, to]) => {
+          const inBand = slots.filter((when) => {
+            const mins = when.getHours() * 60 + when.getMinutes();
+            return mins >= from && mins < to;
+          });
+          if (!inBand.length) return;
 
-        const head = document.createElement('p');
-        head.className = 'day-head';
-        const name = document.createElement('span');
-        name.className = 'day-name';
-        name.textContent = DAY_NAMES[day.getDay()];
-        const num = document.createElement('span');
-        num.className = 'day-num';
-        num.textContent = day.getDate();
-        head.append(name, num);
+          const band = document.createElement('div');
+          band.className = 'times-band';
+          band.append(Object.assign(document.createElement('p'), { className: 'times-band-label', textContent: label }));
 
-        const list = document.createElement('div');
-        list.className = 'day-slots';
-        const slots = slotsFor(day);
-
-        if (!slots.length) {
-          col.classList.add('day--past');
-          const none = document.createElement('span');
-          none.className = 'day-empty';
-          none.textContent = '–';
-          none.title = 'No openings';
-          list.append(none);
-        } else {
-          slots.forEach((when) => {
+          const row = document.createElement('div');
+          row.className = 'times-row';
+          inBand.forEach((when) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'slot';
             btn.textContent = slotTime(when);
             btn.setAttribute('aria-label', slotLabel(when));
-            if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) {
-              btn.classList.add('is-chosen');
-              btn.setAttribute('aria-pressed', 'true');
-            }
+            btn.setAttribute('aria-pressed', chosenSlot && slotKey(chosenSlot) === slotKey(when) ? 'true' : 'false');
+            if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) btn.classList.add('is-chosen');
             btn.addEventListener('click', () => {
               chosenSlot = when;
+              activeDay = new Date(when);
               renderWeek();
               if (showLiveErrors) renderErrors();
             });
-            list.append(btn);
+            row.append(btn);
           });
-        }
+          band.append(row);
+          body.append(band);
+        });
+      }
 
-        col.append(head, list);
-        return col;
+      weekTimes.replaceChildren(head, body);
+    };
+
+    const renderWeek = () => {
+      // A longer job can swallow a spot that was free a moment ago.
+      if (chosenSlot && !slotsFor(new Date(chosenSlot)).some((d) => slotKey(d) === slotKey(chosenSlot))) {
+        chosenSlot = null;
+      }
+      if (chosenSlot) activeDay = new Date(chosenSlot);
+
+      const start = startOfWeek(weekOffset);
+      const today = new Date();
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        return { date, slots: slotsFor(date) };
+      });
+
+      // Land on a day with something on it rather than an empty Sunday.
+      let current = days.find((d) => sameDay(d.date, activeDay));
+      if (!current || !current.slots.length) current = days.find((d) => d.slots.length) || null;
+      activeDay = current ? current.date : null;
+
+      weekDays.replaceChildren(...days.map(({ date, slots }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'day';
+        btn.disabled = !slots.length;
+        if (sameDay(date, today)) btn.classList.add('day--today');
+        if (sameDay(date, activeDay)) btn.classList.add('is-active');
+        btn.setAttribute('aria-pressed', sameDay(date, activeDay) ? 'true' : 'false');
+        btn.setAttribute('aria-label', `${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — ${slots.length ? `${slots.length} open` : 'nothing open'}`);
+
+        btn.append(
+          Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.getDay()] }),
+          Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.getDate() }),
+          Object.assign(document.createElement('span'), { className: 'day-dot', ariaHidden: 'true' }),
+        );
+        btn.addEventListener('click', () => {
+          activeDay = date;
+          renderWeek();
+        });
+        return btn;
       }));
+
+      renderTimes(activeDay, current ? current.slots : []);
 
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
@@ -319,10 +424,12 @@
 
     weekPrev.addEventListener('click', () => {
       weekOffset = Math.max(0, weekOffset - 1);
+      activeDay = null;
       renderWeek();
     });
     weekNext.addEventListener('click', () => {
       weekOffset = Math.min(availability.weeksAhead, weekOffset + 1);
+      activeDay = null;
       renderWeek();
     });
 
@@ -417,7 +524,7 @@
         || (needsOtherVehicle() && otherInput.value.trim().length < 2 ? otherInput : null),
       'Pick your vehicle’s year, make, and model.'],
       ['package', selectedPackage() ? null : $('input[name="package"]', form), 'Pick a package to continue.'],
-      ['slot', chosenSlot ? null : ($('.slot', weekGrid) || weekNext), 'Pick a start time that works for you.'],
+      ['slot', chosenSlot ? null : ($('.slot', weekTimes) || weekNext), 'Pick a start time that works for you.'],
       ['name', nameInput.value.trim().length >= 2 ? null : nameInput, 'Please enter your name.'],
       ['phone', phoneInput.value.replace(/\D/g, '').length >= 10 ? null : phoneInput, 'Please enter a phone number we can text.'],
       ['email', !emailInput.value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim()) ? null : emailInput, 'That email doesn’t look quite right.'],
@@ -569,15 +676,38 @@
         return;
       }
 
+      const held = chosenSlot;
+      const heldMinutes = jobMinutes();
+
       submitBtn.disabled = true;
       submitBtn.classList.add('is-loading');
       try {
+        // Someone may have taken this spot while the form was open.
+        try {
+          await loadShared();
+        } catch (err) {
+          console.warn('Could not refresh booked times', err);
+        }
+        if (held && isTaken(held, heldMinutes)) {
+          renderWeek();
+          showLiveErrors = true;
+          renderErrors();
+          status.textContent = 'Sorry — that spot was just booked. Please pick another time.';
+          weekTimes.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
+          return;
+        }
+
         const res = await fetch(`https://formspree.io/f/${CONFIG.formspreeId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(formspreePayload(request)),
         });
         if (!res.ok) throw new Error(`Formspree responded with ${res.status}`);
+        try {
+          await holdSlot(held, heldMinutes);
+        } catch (err) {
+          console.warn('Could not mark the spot as taken', err); // the request still went through
+        }
         showResult(request, 'sent');
       } catch (err) {
         console.error(err);
@@ -618,6 +748,9 @@
 
     refreshVehicle();
     renderWeek();
+
+    // Spots other people already booked, so they stop showing up here.
+    loadShared().then(renderWeek).catch((err) => console.warn('Could not load booked times', err));
   }
 
   setSize(size);
