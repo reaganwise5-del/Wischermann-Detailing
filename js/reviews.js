@@ -34,6 +34,12 @@ window.WD_REVIEWS = {
     },
     {
       source: 'nextdoor',
+      name: 'St B.',
+      place: 'Wooldridge/Village',
+      text: 'Very professional during the quote and schedule process. The detailing was thorough, and was based on a knowledge of products and techniques. I didn’t expect the great results! I can highly recommend Wischermann Detailing.',
+    },
+    {
+      source: 'nextdoor',
       name: 'Tuba B.',
       place: 'Lynchburg',
       text: 'A highly responsible young man, Reagan came and cleaned my SUV in and out in a very detailed way… I definitely recommend his service to everyone. He did an excellent job. He was also very kind and reliable.',

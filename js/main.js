@@ -70,6 +70,13 @@
         entry.target.classList.add('is-visible');
         observer.unobserve(entry.target);
       });
+      // A fast scroll can carry an element straight past the viewport without the observer
+      // ever seeing it intersect, which would leave it stuck invisible. Sweep those up.
+      revealEls.forEach((el) => {
+        if (el.classList.contains('is-visible') || el.getBoundingClientRect().bottom > 0) return;
+        el.classList.add('is-visible');
+        observer.unobserve(el);
+      });
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
     revealEls.forEach((el) => io.observe(el));
   } else {
