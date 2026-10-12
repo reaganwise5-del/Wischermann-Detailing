@@ -81,6 +81,7 @@
       <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/>
       <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
     </symbol>
+    <symbol id="i-tire" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3v5.6M12 15.4V21M3 12h5.6M15.4 12H21"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 6 3.5Z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
@@ -231,6 +232,13 @@
           </div>
           <div class="section-head-aside" data-reveal style="--delay: 160ms">
             <p class="section-lead">Every package is done by hand, at your place.</p>
+            <fieldset class="seg" data-size-control>
+              <legend class="sr-only">Vehicle size</legend>
+              <label><input type="radio" name="size-view" value="car" data-label="Sedan / Coupe" checked><span>Car</span></label>
+              <label><input type="radio" name="size-view" value="suv" data-label="SUV / Crossover"><span>SUV</span></label>
+              <label><input type="radio" name="size-view" value="truck" data-label="Truck / Van"><span>Truck / Van</span></label>
+              <span class="seg-indicator" aria-hidden="true"></span>
+            </fieldset>
             <p class="promo">
               <span class="promo-flag">Special</span>
               <span class="promo-text"><strong>One price, any vehicle.</strong> Car, SUV, truck or van — a Full Detail is $199 while this deal lasts.</span>
@@ -239,13 +247,13 @@
         </div>
 
         <div class="pkg-grid">
-          <article class="pkg" data-package="exterior" data-name="Exterior Shine" data-car="89" data-suv="89" data-truck="89" data-reveal>
+          <article class="pkg" data-package="exterior" data-name="Exterior Shine" data-car="89" data-suv="109" data-truck="129" data-reveal>
             <span class="pkg-icon"><svg class="icon"><use href="#i-droplets"></use></svg></span>
             <h3 class="pkg-name">Exterior Shine</h3>
             <p class="pkg-tagline">Hand wash, wheels &amp; gloss protection</p>
             <p class="pkg-price">
               <span class="pkg-currency">$</span><span class="pkg-amount" data-price>89</span>
-              <span class="pkg-size">Any vehicle</span>
+              <span class="pkg-size" data-size-label>Sedan / Coupe</span>
             </p>
             <ul class="pkg-features">
               <li><svg class="icon"><use href="#i-check"></use></svg>Foam pre-wash &amp; careful hand wash</li>
@@ -277,13 +285,13 @@
             <a class="btn btn-primary btn-block" href="#quote" data-book="full">Book Full Detail</a>
           </article>
 
-          <article class="pkg" data-package="interior" data-name="Interior Refresh" data-car="129" data-suv="129" data-truck="129" data-reveal style="--delay: 200ms">
+          <article class="pkg" data-package="interior" data-name="Interior Refresh" data-car="129" data-suv="149" data-truck="169" data-reveal style="--delay: 200ms">
             <span class="pkg-icon"><svg class="icon"><use href="#i-armchair"></use></svg></span>
             <h3 class="pkg-name">Interior Refresh</h3>
             <p class="pkg-tagline">A deep clean for the cabin</p>
             <p class="pkg-price">
               <span class="pkg-currency">$</span><span class="pkg-amount" data-price>129</span>
-              <span class="pkg-size">Any vehicle</span>
+              <span class="pkg-size" data-size-label>Sedan / Coupe</span>
             </p>
             <ul class="pkg-features">
               <li><svg class="icon"><use href="#i-check"></use></svg>Full vacuum: seats, carpets, mats &amp; trunk</li>
@@ -334,6 +342,9 @@
             </li>
             <li class="addon" data-addon="ceramic" data-name="Ceramic spray sealant" data-price="45">
               <svg class="icon"><use href="#i-layers"></use></svg><span class="addon-name">Ceramic spray sealant</span><span class="addon-price">+$45</span>
+            </li>
+            <li class="addon" data-addon="tire-shine" data-name="Ceramic tire shine" data-price="20">
+              <svg class="icon"><use href="#i-tire"></use></svg><span class="addon-name">Ceramic tire shine</span><span class="addon-price">+$20</span>
             </li>
             <li class="addon" data-addon="trim" data-name="Trim restoration" data-price="25">
               <svg class="icon"><use href="#i-wand"></use></svg><span class="addon-name">Trim restoration</span><span class="addon-price">+$25</span>
