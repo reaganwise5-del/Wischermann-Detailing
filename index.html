@@ -533,7 +533,7 @@
           </ul>
         </div>
 
-        <!-- TODO: add headshots as <img src="images/team/reagan.jpg" alt="Reagan Wise"> inside each .crew-photo. -->
+        <!-- Add a headshot by dropping an <img> into a .crew-photo, like Taylor’s below. Without one, the initials show. -->
         <div class="crew">
           <article class="crew-card crew-card--owner" data-reveal>
             <div class="crew-photo"><span class="crew-initials" aria-hidden="true">RW</span></div>
@@ -544,7 +544,7 @@
             </div>
           </article>
           <article class="crew-card" data-reveal style="--delay: 100ms">
-            <div class="crew-photo"><span class="crew-initials" aria-hidden="true">TL</span></div>
+            <div class="crew-photo"><img src="images/crew/taylor-600.jpg" srcset="images/crew/taylor-300.jpg 300w, images/crew/taylor-600.jpg 600w" sizes="(min-width: 720px) 380px, 84px" alt="Taylor Labarre vacuuming the inside of an SUV" width="600" height="750" loading="lazy"></div>
             <div class="crew-info">
               <h3>Taylor Labarre</h3>
               <p class="crew-role">Detailer</p>
