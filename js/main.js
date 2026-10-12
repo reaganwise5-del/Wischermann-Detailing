@@ -195,9 +195,14 @@
       if (!pkg) return null;
       const type = vehicleType && !sizeOverridden ? vehicles.types[vehicleType] : null;
       const condition = Number(selectedCondition()?.dataset.multiplier || 1);
-      const total = pkg.prices[size] * (1 + (type ? type.adjust : 0)) * condition
-        + selectedAddons().reduce((sum, a) => sum + a.price, 0);
-      return { low: roundTo5(total * CONFIG.estimateRange.low), high: roundTo5(total * CONFIG.estimateRange.high) };
+      const addons = selectedAddons().reduce((sum, a) => sum + a.price, 0);
+      const total = pkg.prices[size] * (1 + (type ? type.adjust : 0)) * condition + addons;
+      // The package price is advertised, so never quote under it — the range only ever goes up.
+      const floor = pkg.prices[size] + addons;
+      return {
+        low: Math.max(floor, roundTo5(total * CONFIG.estimateRange.low)),
+        high: Math.max(floor, roundTo5(total * CONFIG.estimateRange.high)),
+      };
     };
     const estimateText = (range) => `${money(range.low)}–${money(range.high)}`;
 

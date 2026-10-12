@@ -394,6 +394,19 @@ dl, dd { margin: 0; }
 
 .section-title { font-size: clamp(2.1rem, 4.8vw, 3.6rem); font-weight: 800; line-height: 1.04; letter-spacing: -0.03em; text-wrap: balance; }
 .section-lead { max-width: 34rem; font-size: clamp(1.02rem, 1.3vw, 1.125rem); color: var(--text-muted); text-wrap: pretty; }
+
+/* Flat-price special callout. */
+.promo {
+  display: flex; align-items: flex-start; gap: 12px; max-width: 34rem; margin-top: 18px;
+  padding: 14px 16px; border-radius: 14px;
+  background: rgb(var(--brand-glow) / .1); box-shadow: inset 0 0 0 1px rgb(var(--brand-glow) / .45);
+}
+.promo-flag {
+  flex: none; padding: 5px 11px; border-radius: 999px; background: var(--brand); color: #fff;
+  font-family: var(--font-display); font-size: .66rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+}
+.promo-text { font-size: .95rem; line-height: 1.55; color: var(--text-muted); text-wrap: pretty; }
+.promo-text strong { color: var(--text); font-weight: 700; }
 .section-title + .section-lead { margin-top: 20px; }
 
 @media (min-width: 900px) {
