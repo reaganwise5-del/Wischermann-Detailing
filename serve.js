@@ -39,10 +39,13 @@ const handleSlots = (req, res) => {
   req.on('data', (chunk) => { body += chunk; });
   req.on('end', () => {
     try {
-      const { slot, minutes } = JSON.parse(body || '{}');
+      const { slot, minutes, crew: rawCrew } = JSON.parse(body || '{}');
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(slot || '')) return json(400, { ok: false });
+      const crew = ['taylor', 'chase'].includes(rawCrew) ? rawCrew : null;
       const list = readStore();
-      if (!list.some((entry) => entry.slot === slot)) list.push({ slot, minutes: Number(minutes) || 180, at: new Date().toISOString() });
+      if (!list.some((entry) => entry.slot === slot && (entry.crew || null) === crew)) {
+        list.push({ slot, minutes: Number(minutes) || 180, ...(crew ? { crew } : {}), at: new Date().toISOString() });
+      }
       fs.writeFileSync(store, JSON.stringify(list, null, 2));
       json(200, { ok: true, storage: true, booked: list });
     } catch {

@@ -206,9 +206,9 @@
     };
     const estimateText = (range) => `${money(range.low)}–${money(range.high)}`;
 
-    /* Time picker: pick a day, then a time. Start times come from js/availability.js. */
+    /* Time picker: pick a day, then a time. Who can work when lives in js/availability.js. */
 
-    const availability = window.WD_AVAILABILITY;
+    const schedule = window.WD_AVAILABILITY;
     const quick = $('#q-quick');
     const weekDays = $('#q-week-days');
     const weekTimes = $('#q-week-times');
@@ -218,8 +218,9 @@
     const weekNext = $('#q-week-next');
     const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const CREW_IDS = Object.keys(schedule.crew);
     let weekOffset = 0;
-    let chosenSlot = null;
+    let chosenSlot = null; // { key, day, minute, at, crew }
     let activeDay = null;
 
     const pad2 = (n) => String(n).padStart(2, '0');
@@ -227,50 +228,136 @@
       const [h, m] = hhmm.split(':').map(Number);
       return h * 60 + m;
     };
-    const slotKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-    const slotTime = (date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
-    const slotLabel = (date) => `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
     const lengthText = (mins) => (mins % 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min` : `${mins / 60} hr`);
 
-    // How long we need to hold the spot: package time plus a bit more for bigger vehicles.
-    const jobMinutes = () => {
-      const pkg = selectedPackage();
-      const base = pkg ? availability.durations[pkg.id] : 120;
-      return base + (availability.sizeExtraMinutes[size] || 0);
+    /* Shop time. Every slot is worked out in Lynchburg time, whatever clock the visitor's device is on. */
+
+    const TZ = schedule.timeZone;
+    const partsFormat = new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+    const zoned = (ms) => {
+      const p = Object.fromEntries(partsFormat.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+      return { y: +p.year, m: +p.month, d: +p.day, hh: +p.hour % 24, mm: +p.minute };
+    };
+    const offsetAt = (ms) => {
+      const z = zoned(ms);
+      return Date.UTC(z.y, z.m - 1, z.d, z.hh, z.mm) - Math.floor(ms / 60000) * 60000;
+    };
+    // Each day carries its UTC offset, taken at noon. DST switches at 2 am, hours before any job.
+    const dayCache = new Map();
+    const dayOf = (y, m, d) => {
+      const u = new Date(Date.UTC(y, m - 1, d));
+      const key = `${u.getUTCFullYear()}-${pad2(u.getUTCMonth() + 1)}-${pad2(u.getUTCDate())}`;
+      if (dayCache.has(key)) return dayCache.get(key);
+      const day = { y: u.getUTCFullYear(), m: u.getUTCMonth() + 1, d: u.getUTCDate(), wd: u.getUTCDay(), key };
+      const noonGuess = Date.UTC(day.y, day.m - 1, day.d, 12);
+      day.offset = offsetAt(noonGuess - offsetAt(noonGuess));
+      day.noon = noonGuess - day.offset;
+      dayCache.set(key, day);
+      return day;
+    };
+    // The instant a shop-clock time happens on a given day.
+    const atLocal = (day, minutes) => Date.UTC(day.y, day.m - 1, day.d, 0, minutes) - day.offset;
+    const today = () => {
+      const z = zoned(Date.now());
+      return dayOf(z.y, z.m, z.d);
+    };
+    const addDays = (day, n) => dayOf(day.y, day.m, day.d + n);
+    const daysBetween = (a, b) => Math.round((Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000);
+    const sameDay = (a, b) => Boolean(a && b && a.key === b.key);
+
+    const timeText = (ms) => new Date(ms).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+    const dateText = (day, opts) => new Date(day.noon).toLocaleDateString('en-US', { timeZone: TZ, ...opts });
+    const slotTime = (slot) => timeText(slot.at).replace(':00', '');
+    const slotLabel = (slot) => `${dateText(slot.day, { weekday: 'short', month: 'short', day: 'numeric' })} at ${timeText(slot.at)}`;
+    const keyFor = (day, minute) => `${day.key}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+
+    /* Sunset in Lynchburg for any date — the standard sunrise equation, good to a minute or two. */
+
+    const sunsets = new Map();
+    const sunsetFor = (day) => {
+      if (sunsets.has(day.key)) return sunsets.get(day.key);
+      const { lat, lng } = schedule.location;
+      const rad = Math.PI / 180;
+      // Days since J2000, counted at noon UTC on this calendar date (rounding up instead lands on tomorrow).
+      const n = Math.round(Date.UTC(day.y, day.m - 1, day.d, 12) / 86400000 + 2440587.5 - 2451545.0);
+      const jStar = n - lng / 360;
+      const meanAnomaly = (357.5291 + 0.98560028 * jStar) % 360;
+      const centre = 1.9148 * Math.sin(meanAnomaly * rad) + 0.02 * Math.sin(2 * meanAnomaly * rad) + 0.0003 * Math.sin(3 * meanAnomaly * rad);
+      const longitude = (meanAnomaly + centre + 180 + 102.9372) % 360;
+      const transit = 2451545.0 + jStar + 0.0053 * Math.sin(meanAnomaly * rad) - 0.0069 * Math.sin(2 * longitude * rad);
+      const sinDec = Math.sin(longitude * rad) * Math.sin(23.4397 * rad);
+      const cosHour = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * sinDec) / (Math.cos(lat * rad) * Math.cos(Math.asin(sinDec)));
+      const hourAngle = Math.acos(Math.min(1, Math.max(-1, cosHour))) / rad;
+      const set = (transit + hourAngle / 360 - 2440587.5) * 86400000;
+      sunsets.set(day.key, set);
+      return set;
     };
 
-    /* Spots that are already taken — from availability.js and from other people's bookings. */
+    /* The job being booked: how long it runs and whether it needs daylight. */
 
-    let takenLocal = [];   // blocked by hand in availability.js
-    let takenShared = [];  // booked through the site by someone else
+    const jobPlan = () => {
+      const d = schedule.durations;
+      const job = selectedPackage()?.id || null;
+      const addonIds = selectedAddons().map((a) => a.id);
+      const threeRow = vehicleType && !sizeOverridden && schedule.threeRowTypes.includes(vehicleType);
+      const minutes = (job ? d.base[job] : Math.min(...Object.values(d.base)))
+        + (threeRow ? d.size['three-row'] : (d.size[size] || 0))
+        + (d.condition[selectedCondition()?.value] ?? d.condition.normal)
+        + addonIds.reduce((sum, id) => sum + (d.addons[id] || 0), 0);
+      return {
+        job,
+        minutes,
+        daylightJob: Boolean(job) && schedule.daylight.jobs.includes(job),
+        daylightAddon: addonIds.some((id) => schedule.daylight.addons.includes(id)),
+      };
+    };
+
+    /* Time already spoken for — blocked by hand in availability.js, or booked through the site. */
+
+    let takenLocal = [];
+    let takenShared = [];
 
     const parseSlot = (value) => {
       const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(value || '').trim());
-      return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+      return m ? atLocal(dayOf(+m[1], +m[2], +m[3]), +m[4] * 60 + +m[5]) : null;
     };
 
-    // Accepts '2026-09-26T13:30', ['2026-09-26T13:30', 120], or { slot, minutes }.
+    // Accepts '2026-11-07T10:00', ['2026-11-07T10:00', 90], or { slot, minutes, crew }.
+    // No crew means the time is blocked for everyone.
     const toBusy = (entry) => {
-      const raw = Array.isArray(entry) ? entry[0] : (entry && typeof entry === 'object' ? entry.slot : entry);
-      const mins = Array.isArray(entry) ? entry[1] : (entry && typeof entry === 'object' ? entry.minutes : null);
+      const isObj = entry && typeof entry === 'object' && !Array.isArray(entry);
+      const raw = Array.isArray(entry) ? entry[0] : (isObj ? entry.slot : entry);
+      const mins = Array.isArray(entry) ? entry[1] : (isObj ? entry.minutes : null);
+      const crew = isObj && CREW_IDS.includes(entry.crew) ? entry.crew : null;
       const start = parseSlot(raw);
-      if (!start) return null;
-      const length = Number(mins) > 0 ? Number(mins) : (availability.blockMinutes || 180);
-      return { start: start.getTime(), end: start.getTime() + length * 60000 };
+      if (start === null) return null;
+      const length = Number(mins) > 0 ? Number(mins) : (schedule.blockMinutes || 180);
+      return { start, end: start + length * 60000, crew };
     };
 
-    takenLocal = (availability.booked || []).map(toBusy).filter(Boolean);
+    takenLocal = (schedule.booked || []).map(toBusy).filter(Boolean);
+    const allBusy = () => takenLocal.concat(takenShared);
 
-    // A start time is out if the job would run over something already on the books.
-    const isTaken = (when, needed) => {
-      const from = when.getTime();
-      const to = from + needed * 60000;
-      return takenLocal.concat(takenShared).some((busy) => from < busy.end && to > busy.start);
+    // A detailer can't take a job that runs into another one, with travel time either side.
+    const isBusy = (crewId, start, end, busy) => {
+      const gap = schedule.bufferMinutes * 60000;
+      return busy.some((b) => (!b.crew || b.crew === crewId) && start < b.end + gap && end + gap > b.start);
+    };
+
+    // When both can take it, give it to whoever has less on the books that week, so jobs alternate.
+    const pickCrew = (crews, day, busy) => {
+      if (crews.length === 1) return crews[0];
+      const weekStart = atLocal(addDays(day, -((day.wd + 6) % 7)), 0);
+      const weekEnd = weekStart + 7 * 86400000;
+      const load = (id) => busy.reduce((sum, b) => sum + (b.crew === id && b.start >= weekStart && b.start < weekEnd ? b.end - b.start : 0), 0);
+      return crews.reduce((best, id) => (load(id) < load(best) ? id : best));
     };
 
     const loadShared = async () => {
-      if (!availability.apiPath) return false;
-      const res = await fetch(availability.apiPath, { headers: { Accept: 'application/json' } });
+      if (!schedule.apiPath) return false;
+      const res = await fetch(schedule.apiPath, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`Slots endpoint responded with ${res.status}`);
       const data = await res.json();
       takenShared = (data.booked || []).map(toBusy).filter(Boolean);
@@ -278,95 +365,98 @@
     };
 
     // Tell the site a spot is gone so it stops showing up for everyone else.
-    const holdSlot = async (when, needed) => {
-      if (!availability.apiPath || !when) return;
-      await fetch(availability.apiPath, {
+    const holdSlot = async (slot, minutes) => {
+      if (!schedule.apiPath || !slot) return;
+      await fetch(schedule.apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ slot: slotKey(when), minutes: needed }),
+        body: JSON.stringify({ slot: slot.key, minutes, crew: slot.crew }),
       });
-      takenShared.push({ start: when.getTime(), end: when.getTime() + needed * 60000 });
+      takenShared.push({ start: slot.at, end: slot.at + minutes * 60000, crew: slot.crew });
     };
 
-    const slotsFor = (day) => {
-      const windows = availability.windows[DAY_KEYS[day.getDay()]] || [];
-      const needed = jobMinutes();
-      const earliest = Date.now() + availability.leadTimeHours * 3600000;
-      const out = [];
-      windows.forEach(([from, to]) => {
-        const closes = toMinutes(to) + (availability.graceMinutes || 0);
-        for (let start = toMinutes(from); start + needed <= closes; start += availability.slotStepMinutes) {
-          const when = new Date(day);
-          when.setHours(0, start, 0, 0);
-          if (when.getTime() < earliest) continue;
-          if (isTaken(when, needed)) continue;
-          out.push(when);
-        }
-      });
-      return out;
+    // After a block's first start, starts fall on the hour and half hour.
+    const nextStart = (minute) => {
+      const step = schedule.slotStepMinutes;
+      return minute % step ? Math.ceil(minute / step) * step : minute + step;
     };
 
+    // Every start time on this day that at least one detailer can take, with who'd take it.
+    const slotsFor = (day, plan) => {
+      const busy = allBusy();
+      const earliest = Date.now() + schedule.leadTimeHours * 3600000;
+      const sunset = sunsetFor(day);
+      const byMinute = new Map();
 
-    const sameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
+      CREW_IDS.forEach((crewId) => {
+        (schedule.crew[crewId].week[DAY_KEYS[day.wd]] || []).forEach((block) => {
+          if (plan.job && block.allowed && !block.allowed.includes(plan.job)) return;
+          const latest = plan.job && block.latest && block.latest[plan.job] ? toMinutes(block.latest[plan.job]) : null;
+          // Taylor's latest starts already allow for daylight on the job itself. A daylight add-on he
+          // didn't plan around still has to be done before sunset.
+          const mustBeatSunset = plan.daylightAddon || (plan.daylightJob && latest === null);
+          const close = toMinutes(block.end);
+
+          for (let minute = toMinutes(block.start); minute + plan.minutes <= close; minute = nextStart(minute)) {
+            if (latest !== null && minute > latest) break;
+            const start = atLocal(day, minute);
+            const end = start + plan.minutes * 60000;
+            if (mustBeatSunset && end > sunset) break; // later starts only finish later
+            if (start < earliest || isBusy(crewId, start, end, busy)) continue;
+            const slot = byMinute.get(minute) || { key: keyFor(day, minute), day, minute, at: start, crews: [] };
+            slot.crews.push(crewId);
+            byMinute.set(minute, slot);
+          }
+        });
+      });
+
+      return [...byMinute.values()]
+        .sort((a, b) => a.minute - b.minute)
+        .map((slot) => ({ ...slot, crew: pickCrew(slot.crews, day, busy) }));
+    };
 
     // Times sit in these bands so a day never turns into one long list.
     const BANDS = [['Morning', 0, 12 * 60], ['Afternoon', 12 * 60, 17 * 60], ['Evening', 17 * 60, 24 * 60]];
     const QUICK_PICKS = 4;
 
-    const midnight = (date) => {
-      const day = new Date(date);
-      day.setHours(0, 0, 0, 0);
-      return day;
-    };
-
     // The week runs from today, not from Sunday, so a day that has already gone never shows up.
-    const windowStart = (offset) => {
-      const day = midnight(new Date());
-      day.setDate(day.getDate() + offset * 7);
-      return day;
+    const windowStart = (offset) => addDays(today(), offset * 7);
+    const offsetFor = (day) => Math.max(0, Math.floor(daysBetween(today(), day) / 7));
+    const dayRelative = (day) => {
+      const n = daysBetween(today(), day);
+      if (n === 0) return 'Today';
+      if (n === 1) return 'Tomorrow';
+      return dateText(day, { weekday: 'long' });
     };
 
-    const offsetFor = (date) => {
-      const days = Math.round((midnight(date) - midnight(new Date())) / 86400000);
-      return Math.max(0, Math.floor(days / 7));
-    };
+    const isChosen = (slot) => Boolean(chosenSlot && chosenSlot.key === slot.key);
 
-    const dayShort = (date) => date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const dayRelative = (date) => {
-      const days = Math.round((midnight(date) - midnight(new Date())) / 86400000);
-      if (days === 0) return 'Today';
-      if (days === 1) return 'Tomorrow';
-      return date.toLocaleDateString('en-US', { weekday: 'long' });
-    };
-
-    const chooseSlot = (when) => {
-      chosenSlot = when;
-      activeDay = new Date(when);
-      weekOffset = offsetFor(when);
+    const chooseSlot = (slot) => {
+      chosenSlot = slot;
+      activeDay = slot.day;
+      weekOffset = offsetFor(slot.day);
       renderWeek();
       if (showLiveErrors) renderErrors();
     };
 
-    const slotButton = (when) => {
+    const slotButton = (slot) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'slot';
-      btn.textContent = slotTime(when);
-      btn.setAttribute('aria-label', slotLabel(when));
-      btn.setAttribute('aria-pressed', chosenSlot && slotKey(chosenSlot) === slotKey(when) ? 'true' : 'false');
-      if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) btn.classList.add('is-chosen');
-      btn.addEventListener('click', () => chooseSlot(when));
+      btn.textContent = slotTime(slot);
+      btn.setAttribute('aria-label', slotLabel(slot));
+      btn.setAttribute('aria-pressed', isChosen(slot) ? 'true' : 'false');
+      if (isChosen(slot)) btn.classList.add('is-chosen');
+      btn.addEventListener('click', () => chooseSlot(slot));
       return btn;
     };
 
     // The next few openings, for anyone who just wants the soonest one.
-    const renderQuick = () => {
+    const renderQuick = (plan) => {
       const picks = [];
-      for (let i = 0; i <= availability.weeksAhead * 7 && picks.length < QUICK_PICKS; i++) {
-        const day = windowStart(0);
-        day.setDate(day.getDate() + i);
+      for (let i = 0; i <= schedule.weeksAhead * 7 && picks.length < QUICK_PICKS; i++) {
         // At most two per day, so the row spreads across days instead of stacking on one.
-        slotsFor(day).slice(0, 2).forEach((when) => { if (picks.length < QUICK_PICKS) picks.push(when); });
+        slotsFor(addDays(today(), i), plan).slice(0, 2).forEach((slot) => { if (picks.length < QUICK_PICKS) picks.push(slot); });
       }
 
       quick.hidden = !picks.length;
@@ -378,18 +468,18 @@
 
       const row = document.createElement('div');
       row.className = 'quick-row';
-      picks.forEach((when) => {
+      picks.forEach((slot) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'quick-pick';
-        if (chosenSlot && slotKey(chosenSlot) === slotKey(when)) btn.classList.add('is-chosen');
-        btn.setAttribute('aria-pressed', chosenSlot && slotKey(chosenSlot) === slotKey(when) ? 'true' : 'false');
-        btn.setAttribute('aria-label', slotLabel(when));
+        if (isChosen(slot)) btn.classList.add('is-chosen');
+        btn.setAttribute('aria-pressed', isChosen(slot) ? 'true' : 'false');
+        btn.setAttribute('aria-label', slotLabel(slot));
         btn.append(
-          Object.assign(document.createElement('span'), { className: 'quick-day', textContent: dayRelative(when) }),
-          Object.assign(document.createElement('span'), { className: 'quick-time', textContent: slotTime(when) }),
+          Object.assign(document.createElement('span'), { className: 'quick-day', textContent: dayRelative(slot.day) }),
+          Object.assign(document.createElement('span'), { className: 'quick-time', textContent: slotTime(slot) }),
         );
-        btn.addEventListener('click', () => chooseSlot(when));
+        btn.addEventListener('click', () => chooseSlot(slot));
         row.append(btn);
       });
 
@@ -408,7 +498,7 @@
       const head = document.createElement('div');
       head.className = 'times-head';
       head.append(
-        Object.assign(document.createElement('p'), { className: 'times-day', textContent: day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) }),
+        Object.assign(document.createElement('p'), { className: 'times-day', textContent: dateText(day, { weekday: 'long', month: 'short', day: 'numeric' }) }),
         Object.assign(document.createElement('p'), { className: 'times-meta', textContent: slots.length ? `${slots.length} open` : 'No openings' }),
       );
 
@@ -422,18 +512,14 @@
         }));
       } else {
         BANDS.forEach(([name, from, to]) => {
-          const inBand = slots.filter((when) => {
-            const mins = when.getHours() * 60 + when.getMinutes();
-            return mins >= from && mins < to;
-          });
+          const inBand = slots.filter((slot) => slot.minute >= from && slot.minute < to);
           if (!inBand.length) return;
-
           const band = document.createElement('div');
           band.className = 'times-band';
           band.append(Object.assign(document.createElement('p'), { className: 'times-band-label', textContent: name }));
           const row = document.createElement('div');
           row.className = 'times-row';
-          inBand.forEach((when) => row.append(slotButton(when)));
+          inBand.forEach((slot) => row.append(slotButton(slot)));
           band.append(row);
           body.append(band);
         });
@@ -443,17 +529,19 @@
     };
 
     const renderWeek = () => {
-      // A longer job can swallow a spot that was free a moment ago.
-      if (chosenSlot && !slotsFor(new Date(chosenSlot)).some((d) => slotKey(d) === slotKey(chosenSlot))) {
-        chosenSlot = null;
+      const plan = jobPlan();
+
+      // A longer job, a daylight add-on or someone else's booking can take a spot that was free a
+      // moment ago. If it's still there, pick up who'd now take it.
+      if (chosenSlot) {
+        chosenSlot = slotsFor(chosenSlot.day, plan).find((slot) => slot.key === chosenSlot.key) || null;
       }
-      if (chosenSlot) activeDay = new Date(chosenSlot);
+      if (chosenSlot) activeDay = chosenSlot.day;
 
       const start = windowStart(weekOffset);
       const days = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        return { date, slots: slotsFor(date) };
+        const date = addDays(start, i);
+        return { date, slots: slotsFor(date, plan) };
       });
 
       // Land on a day that has something on it rather than an empty one.
@@ -461,18 +549,19 @@
       if (!current || !current.slots.length) current = days.find((d) => d.slots.length) || null;
       activeDay = current ? current.date : null;
 
+      const todayDay = today();
       weekDays.replaceChildren(...days.map(({ date, slots }) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'day';
         btn.disabled = !slots.length;
-        if (sameDay(date, new Date())) btn.classList.add('day--today');
+        if (sameDay(date, todayDay)) btn.classList.add('day--today');
         if (sameDay(date, activeDay)) btn.classList.add('is-active');
         btn.setAttribute('aria-pressed', sameDay(date, activeDay) ? 'true' : 'false');
-        btn.setAttribute('aria-label', `${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — ${slots.length ? `${slots.length} open` : 'nothing open'}`);
+        btn.setAttribute('aria-label', `${dateText(date, { weekday: 'long', month: 'long', day: 'numeric' })} — ${slots.length ? `${slots.length} open` : 'nothing open'}`);
         btn.append(
-          Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.getDay()] }),
-          Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.getDate() }),
+          Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.wd] }),
+          Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.d }),
           Object.assign(document.createElement('span'), { className: 'day-dot' }),
         );
         btn.addEventListener('click', () => {
@@ -483,17 +572,17 @@
       }));
 
       renderTimes(activeDay, current ? current.slots : []);
-      renderQuick();
+      renderQuick(plan);
 
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
       const fmt = { month: 'short', day: 'numeric' };
+      const end = addDays(start, 6);
       weekLabel.textContent = weekOffset === 0
-        ? `Today – ${end.toLocaleDateString('en-US', fmt)}`
-        : `${start.toLocaleDateString('en-US', fmt)} – ${end.toLocaleDateString('en-US', fmt)}`;
-      weekNote.textContent = `Each opening fits your job — about ${lengthText(jobMinutes())}. We’ll text you to confirm the spot before it’s locked in.`;
+        ? `Today – ${dateText(end, fmt)}`
+        : `${dateText(start, fmt)} – ${dateText(end, fmt)}`;
+      const outside = plan.daylightJob || plan.daylightAddon;
+      weekNote.textContent = `Each opening fits your job — about ${lengthText(plan.minutes)}${outside ? ', wrapping up before dark' : ''}. We’ll text you to confirm the spot before it’s locked in.`;
       weekPrev.disabled = weekOffset <= 0;
-      weekNext.disabled = weekOffset >= availability.weeksAhead;
+      weekNext.disabled = weekOffset >= schedule.weeksAhead;
     };
 
     weekPrev.addEventListener('click', () => {
@@ -502,7 +591,7 @@
       renderWeek();
     });
     weekNext.addEventListener('click', () => {
-      weekOffset = Math.min(availability.weeksAhead, weekOffset + 1);
+      weekOffset = Math.min(schedule.weeksAhead, weekOffset + 1);
       activeDay = null;
       renderWeek();
     });
@@ -572,8 +661,9 @@
     otherInput.addEventListener('input', refreshVehicle);
 
     form.addEventListener('change', (e) => {
-      if (['package', 'addons', 'condition'].includes(e.target.name)) refreshVehicle();
-      if (e.target.name === 'package') renderWeek(); // job length changed, so the openings change
+      if (!['package', 'addons', 'condition'].includes(e.target.name)) return;
+      refreshVehicle();
+      renderWeek(); // job length or daylight need changed, so the openings change
     });
 
     /* Validation */
@@ -645,6 +735,8 @@
         condition: selectedCondition()?.dataset.label || 'Average',
         estimate: estimateText(estimate()),
         slot: chosenSlot ? slotLabel(chosenSlot) : 'Flexible',
+        detailer: chosenSlot ? schedule.crew[chosenSlot.crew].name : 'Unassigned',
+        jobLength: lengthText(jobPlan().minutes),
         name: nameInput.value.trim(),
         phone: phoneInput.value.trim(),
         email: emailInput.value.trim(),
@@ -679,6 +771,9 @@
       phone: d.phone,
       ...(d.email ? { email: d.email } : {}),
       requested_time: d.slot,
+      // Internal only: who the calendar was blocked for, and for how long. Reassign freely.
+      detailer: d.detailer,
+      job_length: d.jobLength,
       vehicle: d.vehicle,
       vehicle_type: d.vehicleType,
       vehicle_size: d.size,
@@ -750,8 +845,8 @@
         return;
       }
 
-      const held = chosenSlot;
-      const heldMinutes = jobMinutes();
+      const plan = jobPlan();
+      let held = chosenSlot;
 
       submitBtn.disabled = true;
       submitBtn.classList.add('is-loading');
@@ -762,7 +857,13 @@
         } catch (err) {
           console.warn('Could not refresh booked times', err);
         }
-        if (held && isTaken(held, heldMinutes)) {
+        // Still open? If one detailer got booked meanwhile, the other may still be free for it.
+        held = held && (slotsFor(held.day, plan).find((slot) => slot.key === held.key) || null);
+        if (held) {
+          chosenSlot = held;
+          request.detailer = schedule.crew[held.crew].name;
+        } else {
+          chosenSlot = null;
           renderWeek();
           showLiveErrors = true;
           renderErrors();
@@ -778,7 +879,7 @@
         });
         if (!res.ok) throw new Error(`Formspree responded with ${res.status}`);
         try {
-          await holdSlot(held, heldMinutes);
+          await holdSlot(held, plan.minutes);
         } catch (err) {
           console.warn('Could not mark the spot as taken', err); // the request still went through
         }

@@ -1,42 +1,94 @@
-/* When appointments can start.
-   Right now these are Taylor's "Car detailing" windows from his weekly schedule.
-   Edit the windows below any time: ['start', 'end'] on a 24-hour clock, as many per day as you like. */
+/* Who can take a job, and when. The booking picker reads everything below.
+
+   Times are Lynchburg time on a 24-hour clock. Each detailer has blocks per weekday:
+     start / end   when they're free. A job has to be finished by `end`.
+     allowed       only these job types fit in this block (e.g. ['interior']).
+     latest        the latest start per job type. Taylor set his own, and they already allow for
+                   sunset on that job type, so they win over the computed daylight check.
+
+   Source: Chase's written availability and Taylor's schedule grid, both Oct 25 2026. */
 window.WD_AVAILABILITY = {
-  windows: {
-    sun: [['13:00', '17:00']],
-    mon: [['10:00', '12:00'], ['17:30', '20:30']],
-    tue: [['17:30', '20:30']],
-    wed: [['10:00', '12:00'], ['17:30', '20:30']],
-    thu: [['17:30', '20:30']],
-    fri: [['10:00', '12:00'], ['17:30', '20:30']],
-    sat: [['10:00', '12:00'], ['13:30', '17:30']],
+  timeZone: 'America/New_York',
+  location: { lat: 37.4138, lng: -79.1422 }, // Lynchburg, for sunset
+
+  // Minutes. A job's length = base + vehicle size + condition + every add-on picked.
+  durations: {
+    base: { exterior: 120, interior: 120, full: 210 },
+    size: { car: 0, suv: 30, truck: 45, 'three-row': 60 },
+    condition: { light: 0, normal: 20, heavy: 45 },
+    addons: {
+      'pet-hair': 35,
+      shampoo: 60,
+      steam: 40,
+      odor: 20,
+      'clay-bar': 40,
+      iron: 30,
+      'water-spots': 35,
+      headlights: 40,
+      ceramic: 25,
+      'tire-shine': 10,
+      trim: 25,
+      'engine-bay': 35,
+    },
   },
 
-  // A start time is offered every 30 minutes, as long as the whole job fits inside the window.
-  slotStepMinutes: 30,
+  // Body styles from vehicles.js that get the 3-row SUV time instead of the regular size time.
+  threeRowTypes: ['three-row', 'large-suv'],
 
-  // Don't offer anything sooner than this many hours from now.
-  leadTimeHours: 12,
+  // Work that has to be finished before sunset. Everything else is fine with a work light.
+  daylight: {
+    jobs: ['exterior', 'full'],
+    addons: ['headlights', 'water-spots', 'clay-bar', 'ceramic', 'trim', 'iron', 'tire-shine'],
+  },
 
-  // A job may run this many minutes past the end of a window (Taylor's schedule has a 30-minute
-  // grace period after detailing). Raise it if you're happy to run later, lower it to be strict.
-  graceMinutes: 30,
-
-  // How many weeks ahead the arrows go.
+  bufferMinutes: 30, // travel and setup between back-to-back jobs for the same detailer
+  slotStepMinutes: 30, // after a block's first start, times fall on the hour and half hour
+  leadTimeHours: 12, // nothing sooner than this from now
   weeksAhead: 4,
 
-  // Roughly how long each package takes, in minutes. Bigger vehicles add the extra below.
-  durations: { exterior: 90, interior: 120, full: 180 },
-  sizeExtraMinutes: { car: 0, suv: 30, truck: 45 },
+  crew: {
+    taylor: {
+      name: 'Taylor',
+      // Hard cutoff 18:45. No full details on Tuesday or Thursday — both windows are too short.
+      week: {
+        mon: [
+          { start: '06:15', end: '10:00', latest: { full: '06:30', interior: '08:00' } },
+          { start: '16:00', end: '18:45', allowed: ['interior'] },
+        ],
+        tue: [
+          { start: '07:00', end: '09:15', allowed: ['interior'] },
+          { start: '11:45', end: '13:45', allowed: ['interior'] },
+        ],
+        wed: [{ start: '06:15', end: '18:45', latest: { full: '16:00', interior: '17:00' } }],
+        thu: [
+          { start: '07:00', end: '09:15', allowed: ['interior'] },
+          { start: '11:45', end: '13:45', allowed: ['interior'] },
+        ],
+        fri: [{ start: '07:00', end: '15:30', latest: { full: '10:00', interior: '11:30' } }],
+        sat: [{ start: '06:15', end: '18:45', latest: { full: '16:00', interior: '17:00' } }],
+        sun: [{ start: '13:00', end: '18:45', latest: { full: '17:00', interior: '17:00' } }],
+      },
+    },
+    chase: {
+      name: 'Chase',
+      // Hard cutoff 18:00. His windows are raw availability, so the sunset check does real work here.
+      week: {
+        mon: [{ start: '16:00', end: '18:00' }], // might start at 15:00 if practice ends early
+        tue: [{ start: '11:30', end: '15:00' }],
+        wed: [{ start: '10:10', end: '18:00' }], // recovery day, his best for long details
+        thu: [{ start: '11:30', end: '14:00' }],
+        fri: [{ start: '10:10', end: '18:00' }],
+        sat: [], // "mornings, varies" — can't be booked online until he gives a window
+        sun: [{ start: '13:00', end: '18:00' }],
+      },
+    },
+  },
 
   // Where bookings made on the site are kept, so a spot someone takes disappears for everyone.
-  // Set this to null to turn that off and rely on the hand-written list below.
   apiPath: '/api/slots',
 
-  // How long a blocked time keeps the calendar busy when no length is given.
+  // Times blocked off by hand. '2026-11-07T10:00' blocks everyone for `blockMinutes`;
+  // { slot: '2026-11-07T10:00', minutes: 90, crew: 'chase' } blocks one detailer.
   blockMinutes: 180,
-
-  // Times you want blocked off by hand. Format: 'YYYY-MM-DDTHH:MM', or ['2026-09-23T17:30', 90]
-  // to block a specific number of minutes. Anything booked through the site is handled for you.
   booked: [],
 };

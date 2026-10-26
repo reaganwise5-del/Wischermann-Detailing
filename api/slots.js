@@ -1,6 +1,8 @@
 /* Booked start times, shared by every visitor.
-   GET  /api/slots                                  -> { booked: [{ slot, minutes }], storage }
-   POST /api/slots  { slot: '2026-09-26T13:30', minutes: 180 }
+   GET  /api/slots   -> { booked: [{ slot, minutes, crew }], storage }
+   POST /api/slots   { slot: '2026-09-26T13:30', minutes: 180, crew: 'taylor' }
+
+   Bookings are per detailer: two of them can start at the same time on different jobs.
 
    Storage is a Redis database over its REST API, so there are no packages to install. Connect one
    in Vercel (Storage -> Upstash Redis) and this switches itself on. With no database connected the
@@ -9,6 +11,7 @@
 const KEY = 'wd:booked';
 const MAX_ENTRIES = 800;
 const SLOT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const CREW = ['taylor', 'chase'];
 
 const credentials = () => {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -58,16 +61,17 @@ module.exports = async (req, res) => {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const slot = String(body.slot || '').trim();
       const minutes = Math.round(Number(body.minutes));
-      if (!SLOT_RE.test(slot) || !(minutes >= 15 && minutes <= 600)) {
-        return res.status(400).json({ ok: false, error: 'Expected { slot: "YYYY-MM-DDTHH:MM", minutes }' });
+      const crew = CREW.includes(body.crew) ? body.crew : null;
+      if (!SLOT_RE.test(slot) || !(minutes >= 15 && minutes <= 900)) {
+        return res.status(400).json({ ok: false, error: 'Expected { slot: "YYYY-MM-DDTHH:MM", minutes, crew }' });
       }
 
       const list = await load(creds);
-      const existing = list.find((entry) => entry.slot === slot);
+      const existing = list.find((entry) => entry.slot === slot && (entry.crew || null) === crew);
       if (existing) {
         existing.minutes = Math.max(existing.minutes, minutes); // keep the longer hold
       } else {
-        list.push({ slot, minutes, at: new Date().toISOString() });
+        list.push({ slot, minutes, ...(crew ? { crew } : {}), at: new Date().toISOString() });
       }
       await save(creds, list);
       return res.status(200).json({ ok: true, storage: true, booked: list });
