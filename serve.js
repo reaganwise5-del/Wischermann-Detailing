@@ -54,8 +54,34 @@ const handleSlots = (req, res) => {
   });
 };
 
+// Stand-in for the Google Calendar bridge (tools/calendar-bridge.gs). Point calendarUrl in
+// js/availability.js at '/dev-calendar' to try it. Busy times live in .dev-calendar.json.
+const calendarStore = path.join(root, '.dev-calendar.json');
+const handleCalendar = (req, res) => {
+  const json = (body) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+  const read = () => { try { return JSON.parse(fs.readFileSync(calendarStore, 'utf8')); } catch { return { busy: [], added: [] }; } };
+  if (req.method === 'GET') return json({ ok: true, busy: read().busy });
+
+  let body = '';
+  req.on('data', (chunk) => { body += chunk; });
+  req.on('end', () => {
+    try {
+      const booking = JSON.parse(body || '{}');
+      const start = Date.parse(booking.start);
+      const data = read();
+      data.busy.push({ start, end: start + Number(booking.minutes) * 60000, crew: booking.crew || null });
+      data.added.push({ ...booking, contentType: req.headers['content-type'] });
+      fs.writeFileSync(calendarStore, JSON.stringify(data, null, 2));
+      json({ ok: true });
+    } catch (err) {
+      json({ ok: false, error: String(err) });
+    }
+  });
+};
+
 http.createServer((req, res) => {
   if (req.url.split('?')[0] === '/api/slots') return handleSlots(req, res);
+  if (req.url.split('?')[0] === '/dev-calendar') return handleCalendar(req, res);
 
   let urlPath = '/';
   try { urlPath = decodeURIComponent(req.url.split('?')[0]); } catch {}

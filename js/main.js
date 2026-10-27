@@ -314,10 +314,12 @@
       };
     };
 
-    /* Time already spoken for — blocked by hand in availability.js, or booked through the site. */
+    /* Time already spoken for — blocked by hand in availability.js, on the Google Calendar, or booked
+       through the site. */
 
     let takenLocal = [];
-    let takenShared = [];
+    // Each source keeps its last good answer, so one failed refresh doesn't open up booked time.
+    const shared = { api: [], calendar: [], here: [] };
 
     const parseSlot = (value) => {
       const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(value || '').trim());
@@ -338,7 +340,7 @@
     };
 
     takenLocal = (schedule.booked || []).map(toBusy).filter(Boolean);
-    const allBusy = () => takenLocal.concat(takenShared);
+    const allBusy = () => takenLocal.concat(shared.api, shared.calendar, shared.here);
 
     // A detailer can't take a job that runs into another one, with travel time either side.
     const isBusy = (crewId, start, end, busy) => {
@@ -355,24 +357,72 @@
       return crews.reduce((best, id) => (load(id) < load(best) ? id : best));
     };
 
-    const loadShared = async () => {
-      if (!schedule.apiPath) return false;
-      const res = await fetch(schedule.apiPath, { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(`Slots endpoint responded with ${res.status}`);
+    const readJson = async (res, label) => {
+      if (!res.ok) throw new Error(`${label} responded with ${res.status}`);
       const data = await res.json();
-      takenShared = (data.booked || []).map(toBusy).filter(Boolean);
-      return data.storage === true;
+      if (data.ok === false) throw new Error(`${label}: ${data.error}`);
+      return data;
     };
 
-    // Tell the site a spot is gone so it stops showing up for everyone else.
-    const holdSlot = async (slot, minutes) => {
-      if (!schedule.apiPath || !slot) return;
-      await fetch(schedule.apiPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ slot: slot.key, minutes, crew: slot.crew }),
-      });
-      takenShared.push({ start: slot.at, end: slot.at + minutes * 60000, crew: slot.crew });
+    const loadShared = async () => {
+      const loads = [];
+      if (schedule.apiPath) {
+        loads.push(fetch(schedule.apiPath, { headers: { Accept: 'application/json' } })
+          .then((res) => readJson(res, 'Slots endpoint'))
+          .then((data) => { shared.api = (data.booked || []).map(toBusy).filter(Boolean); }));
+      }
+      if (schedule.calendarUrl) {
+        loads.push(fetch(schedule.calendarUrl, { cache: 'no-store' })
+          .then((res) => readJson(res, 'Calendar'))
+          .then((data) => {
+            shared.calendar = (data.busy || [])
+              .map((b) => ({ start: Number(b.start), end: Number(b.end), crew: CREW_IDS.includes(b.crew) ? b.crew : null }))
+              .filter((b) => b.end > b.start);
+          }));
+      }
+      (await Promise.allSettled(loads))
+        .filter((r) => r.status === 'rejected')
+        .forEach((r) => console.warn('Could not load booked times', r.reason));
+    };
+
+    // Tell the site a spot is gone so it stops showing up for everyone else, and put it on the calendar.
+    const holdSlot = async (slot, minutes, request) => {
+      if (!slot) return;
+      shared.here.push({ start: slot.at, end: slot.at + minutes * 60000, crew: slot.crew });
+      const writes = [];
+      if (schedule.apiPath) {
+        writes.push(fetch(schedule.apiPath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ slot: slot.key, minutes, crew: slot.crew }),
+        }));
+      }
+      if (schedule.calendarUrl) {
+        writes.push(fetch(schedule.calendarUrl, {
+          method: 'POST',
+          // Plain text keeps this a simple request, so the browser can post to Google without a preflight.
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            start: new Date(slot.at).toISOString(),
+            minutes,
+            crew: slot.crew,
+            name: request.name,
+            phone: request.phone,
+            email: request.email,
+            location: request.location,
+            vehicle: request.vehicle,
+            package: request.package,
+            addons: request.addons.join(', '),
+            condition: request.condition,
+            estimate: request.estimate,
+            jobLength: request.jobLength,
+            notes: request.notes,
+          }),
+        }).then((res) => readJson(res, 'Calendar')));
+      }
+      (await Promise.allSettled(writes))
+        .filter((r) => r.status === 'rejected')
+        .forEach((r) => console.warn('Could not mark the spot as taken', r.reason)); // the request still went through
     };
 
     // After a block's first start, starts fall on the hour and half hour.
@@ -879,7 +929,7 @@
         });
         if (!res.ok) throw new Error(`Formspree responded with ${res.status}`);
         try {
-          await holdSlot(held, plan.minutes);
+          await holdSlot(held, plan.minutes, request);
         } catch (err) {
           console.warn('Could not mark the spot as taken', err); // the request still went through
         }

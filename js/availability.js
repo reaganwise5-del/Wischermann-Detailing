@@ -87,6 +87,11 @@ window.WD_AVAILABILITY = {
   // Where bookings made on the site are kept, so a spot someone takes disappears for everyone.
   apiPath: '/api/slots',
 
+  // The Google Calendar bridge: the web-app link from script.google.com (tools/calendar-bridge.gs).
+  // Every booking is added to the Wischermann Detailing calendar, and anything on that calendar
+  // blocks the site. Leave it empty to switch it off.
+  calendarUrl: '',
+
   // Times blocked off by hand. '2026-11-07T10:00' blocks everyone for `blockMinutes`;
   // { slot: '2026-11-07T10:00', minutes: 90, crew: 'chase' } blocks one detailer.
   blockMinutes: 180,
