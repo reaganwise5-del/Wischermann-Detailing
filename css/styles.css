@@ -279,6 +279,7 @@ dl, dd { margin: 0; }
 /* ---------- Scoreboard strip ---------- */
 
 .scoreboard { background: var(--card); border-block: 1px solid var(--line); }
+.scoreboard + .section { border-top: 0; }
 .scoreboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); }
 .scoreboard-item {
   padding: 20px 10px; text-align: center;
@@ -298,7 +299,7 @@ dl, dd { margin: 0; }
 
 .section { position: relative; padding-block: var(--section-y); }
 .section + .section { border-top: 1px solid var(--line); }
-.process, .reviews, .area, .quote { background: var(--card); }
+.packages, .work, .area, .quote { background: var(--card); }
 
 .section-head { margin-bottom: clamp(36px, 5vw, 56px); }
 .section-head--split { display: grid; gap: 20px 56px; align-items: end; }
@@ -436,7 +437,7 @@ dl, dd { margin: 0; }
 /* ---------- How it works ---------- */
 
 .steps { display: grid; gap: 16px; }
-.step { position: relative; overflow: hidden; padding: 30px 26px 28px; border-radius: var(--radius-lg); background: var(--paper); }
+.step { position: relative; overflow: hidden; padding: 30px 26px 28px; border-radius: var(--radius-lg); background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
 .step-num {
   position: absolute; top: 8px; right: 18px;
   font-family: var(--font-display); font-size: 5.6rem; font-weight: 800; line-height: 1;
@@ -576,7 +577,7 @@ dl, dd { margin: 0; }
 .feed-track--down { animation-name: feed-down; }
 .feed-window:hover .feed-track { animation-play-state: paused; }
 
-.review { display: grid; gap: 12px; margin: 0 0 14px; padding: 22px 24px; border-radius: var(--radius); background: var(--paper); }
+.review { display: grid; gap: 12px; margin: 0 0 14px; padding: 22px 24px; border-radius: var(--radius); background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
 .review blockquote { margin: 0; }
 .review blockquote p { font-size: 1rem; line-height: 1.65; color: var(--ink); text-wrap: pretty; }
 .review figcaption { display: flex; align-items: center; gap: 12px; }

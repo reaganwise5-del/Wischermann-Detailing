@@ -109,9 +109,9 @@
 
       <nav class="nav" aria-label="Primary">
         <ul class="nav-links">
+          <li><a href="#reviews">Reviews</a></li>
           <li><a href="#packages">Packages</a></li>
           <li><a href="#work">Our Work</a></li>
-          <li><a href="#reviews">Reviews</a></li>
           <li><a href="#about">About</a></li>
           <li><a href="#faq">FAQ</a></li>
         </ul>
@@ -134,9 +134,9 @@
   <div class="mobile-nav" id="mobile-nav">
     <nav aria-label="Mobile">
       <ul>
+        <li><a href="#reviews">Reviews <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
         <li><a href="#packages">Packages <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
         <li><a href="#work">Our Work <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
-        <li><a href="#reviews">Reviews <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
         <li><a href="#about">About <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
         <li><a href="#area">Service Area <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
         <li><a href="#faq">FAQ <svg class="icon"><use href="#i-arrow-right"></use></svg></a></li>
@@ -201,6 +201,37 @@
         <p class="scoreboard-item">Lynchburg<small>And the towns around it</small></p>
       </div>
     </div>
+
+    <!-- ========== Reviews ========== -->
+    <!-- Two columns drifting opposite ways: Google up, Nextdoor down. The reviews live in js/reviews.js. -->
+    <section class="section reviews" id="reviews" aria-labelledby="reviews-title">
+      <div class="container">
+        <div class="section-head section-head--split">
+          <div>
+            <p class="eyebrow" data-reveal>Reviews</p>
+            <h2 class="section-title" id="reviews-title" data-reveal style="--delay: 80ms">Don’t take our word for it.</h2>
+          </div>
+          <div class="reviews-aside" data-reveal style="--delay: 160ms">
+            <p class="section-lead">Real reviews from real customers. Every word below was left on Google or Nextdoor.</p>
+            <a class="btn btn-ghost" data-google-link href="https://share.google/CcHpPjaMXIDrGmY3s" target="_blank" rel="noopener"><svg class="mark-logo" aria-hidden="true"><use href="#logo-google"></use></svg>See all on Google</a>
+          </div>
+        </div>
+
+        <div class="feeds" data-reveal>
+          <div class="feed" data-feed-col="google">
+            <p class="feed-head">
+              <svg class="mark-logo" aria-hidden="true"><use href="#logo-google"></use></svg><b>Google</b>
+              <span class="stars" data-google-stars></span><span class="feed-meta" data-google-summary="short"></span>
+            </p>
+            <div class="feed-window"><div class="feed-track" data-feed="google"></div></div>
+          </div>
+          <div class="feed" data-feed-col="nextdoor">
+            <p class="feed-head"><b class="mark-word">Nextdoor</b><span class="feed-meta">Recommended by neighbors</span></p>
+            <div class="feed-window"><div class="feed-track feed-track--down" data-feed="nextdoor"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ========== Packages ========== -->
     <!-- Prices: edit data-car / data-suv / data-truck on each package and data-price on each add-on.
@@ -537,37 +568,6 @@
               <p>See a price range for your exact vehicle in about a minute.</p>
             </div>
             <a class="btn btn-primary" href="#quote">Get my estimate <svg class="icon icon--arrow"><use href="#i-arrow-right"></use></svg></a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========== Reviews ========== -->
-    <!-- Two columns drifting opposite ways: Google up, Nextdoor down. The reviews live in js/reviews.js. -->
-    <section class="section reviews" id="reviews" aria-labelledby="reviews-title">
-      <div class="container">
-        <div class="section-head section-head--split">
-          <div>
-            <p class="eyebrow" data-reveal>Reviews</p>
-            <h2 class="section-title" id="reviews-title" data-reveal style="--delay: 80ms">Don’t take our word for it.</h2>
-          </div>
-          <div class="reviews-aside" data-reveal style="--delay: 160ms">
-            <p class="section-lead">Real reviews from real customers. Every word below was left on Google or Nextdoor.</p>
-            <a class="btn btn-ghost" data-google-link href="https://share.google/CcHpPjaMXIDrGmY3s" target="_blank" rel="noopener"><svg class="mark-logo" aria-hidden="true"><use href="#logo-google"></use></svg>See all on Google</a>
-          </div>
-        </div>
-
-        <div class="feeds" data-reveal>
-          <div class="feed" data-feed-col="google">
-            <p class="feed-head">
-              <svg class="mark-logo" aria-hidden="true"><use href="#logo-google"></use></svg><b>Google</b>
-              <span class="stars" data-google-stars></span><span class="feed-meta" data-google-summary="short"></span>
-            </p>
-            <div class="feed-window"><div class="feed-track" data-feed="google"></div></div>
-          </div>
-          <div class="feed" data-feed-col="nextdoor">
-            <p class="feed-head"><b class="mark-word">Nextdoor</b><span class="feed-meta">Recommended by neighbors</span></p>
-            <div class="feed-window"><div class="feed-track feed-track--down" data-feed="nextdoor"></div></div>
           </div>
         </div>
       </div>
@@ -915,9 +915,9 @@
       <nav class="footer-col" aria-label="Footer">
         <h2 class="footer-heading">Explore</h2>
         <ul>
+          <li><a href="#reviews">Reviews</a></li>
           <li><a href="#packages">Packages</a></li>
           <li><a href="#work">Our Work</a></li>
-          <li><a href="#reviews">Reviews</a></li>
           <li><a href="#about">About</a></li>
           <li><a href="#faq">FAQ</a></li>
         </ul>
