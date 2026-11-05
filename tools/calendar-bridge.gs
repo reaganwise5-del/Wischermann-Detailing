@@ -6,13 +6,16 @@
    What it does:
    - Every booking made on the website lands on the calendar below, marked "Pending".
    - Anything on that calendar blocks those times on the website. Put "Taylor" or "Chase" in an
-     event's title to block only that person; anything else blocks both. All-day events block the
-     whole day.
+     event's title to say who's doing it. All-day events block the whole day.
+   - A job far away gets the drive there and back blocked too. Put the address in the event's
+     location, or write something like "1 hr away" or "45 min drive" in the title or notes.
 
-   The website only ever sees *when* someone is busy and for whom. Titles, customer details and
-   anything else on the calendar never leave Google. */
+   The website only ever sees *when* someone is busy, for whom, what kind of job it is and how
+   long the drive is. Titles, addresses, customer details and anything else on the calendar never
+   leave Google. */
 
 const CALENDAR_NAME = 'Wischermann Detailing'; // your calendar's name (capital letters don't matter)
+const HOME_BASE = 'Lynchburg, VA'; // where the drive to each job starts from
 const CREW = ['taylor', 'chase'];
 const WEEKS_AHEAD = 6;
 const MAX_NEW_PER_HOUR = 15; // the website can't add more than this many bookings an hour
@@ -38,6 +41,43 @@ function crewOf_(event) {
   return named.length === 1 ? named[0] : null;
 }
 
+// What kind of job: 'interior' or 'exterior' when the title says just one of them, otherwise null
+// (a full detail, or not said), which the website treats as a full-length job.
+function kindOf_(event) {
+  const title = event.getTitle().toLowerCase();
+  const inside = title.includes('interior');
+  const outside = title.includes('exterior');
+  if (title.includes('full') || inside === outside) return null;
+  return inside ? 'interior' : 'exterior';
+}
+
+// One-way drive in minutes: "1 hr away", "an hour away" or "45 min drive" in the title or notes
+// wins; otherwise it's worked out from the event's location (0 when there's no location).
+function travelTo_(event) {
+  const text = `${event.getTitle()}\n${event.getDescription()}`;
+  if (/\b(an|one)\s+hour\b[^.\n]{0,12}?\b(away|drive|out)\b/i.test(text)) return 60;
+  const said = /(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m)\b[^.\n]{0,12}?\b(away|drive|out)\b/i.exec(text);
+  if (said) return Math.round(Number(said[1]) * (/^h/i.test(said[2]) ? 60 : 1));
+
+  const where = event.getLocation().trim();
+  if (!where) return 0;
+  const cache = CacheService.getScriptCache();
+  const key = `drive-${Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, where))}`;
+  const known = cache.get(key);
+  if (known !== null) return Number(known);
+  let minutes = 0;
+  try {
+    const found = Maps.newDirectionFinder().setOrigin(HOME_BASE).setDestination(where)
+      .setMode(Maps.DirectionFinder.Mode.DRIVING).getDirections();
+    const leg = found.routes && found.routes[0] && found.routes[0].legs[0];
+    if (leg) minutes = Math.round(leg.duration.value / 60);
+  } catch (err) {
+    // Google's daily directions limit, or an address it can't find: no extra drive time.
+  }
+  cache.put(key, String(minutes), 21600); // six hours
+  return minutes;
+}
+
 // GET: busy times for the next few weeks. Add ?ping=1 to just check the calendar is found.
 function doGet(e) {
   try {
@@ -54,6 +94,8 @@ function doGet(e) {
       start: event.getStartTime().getTime(),
       end: event.getEndTime().getTime(),
       crew: crewOf_(event),
+      kind: kindOf_(event),
+      travel: event.isAllDayEvent() ? 0 : travelTo_(event),
     }));
     const body = JSON.stringify({ ok: true, busy });
     cache.put('busy', body, 120); // two minutes; a new booking clears it straight away

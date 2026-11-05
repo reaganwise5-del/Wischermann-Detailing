@@ -42,6 +42,16 @@ window.WD_AVAILABILITY = {
   },
 
   bufferMinutes: 30, // travel and setup between back-to-back jobs for the same detailer
+
+  // One job at a time: anything booked blocks everyone, even if the other detailer is free then.
+  // Set to false if Taylor and Chase start taking separate jobs at the same time.
+  oneJobAtATime: true,
+
+  // Jobs put on the calendar by hand are often an hour long or have no end time at all, so each
+  // one blocks at least this many minutes from its start. A title that says interior or exterior
+  // (and not both) gets the shorter time. A longer event on the calendar is always kept as is.
+  calendarJobMinutes: { full: 210, interior: 150, exterior: 150 },
+
   slotStepMinutes: 30, // after a block's first start, times fall on the hour and half hour
   leadTimeHours: 12, // nothing sooner than this from now
   weeksAhead: 4,

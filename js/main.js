@@ -342,9 +342,23 @@
     const allBusy = () => takenLocal.concat(shared.api, shared.calendar, shared.here);
 
     // A detailer can't take a job that runs into another one, with travel time either side.
+    // With one job at a time, every booking blocks everyone.
     const isBusy = (crewId, start, end, busy) => {
       const gap = schedule.bufferMinutes * 60000;
-      return busy.some((b) => (!b.crew || b.crew === crewId) && start < b.end + gap && end + gap > b.start);
+      return busy.some((b) => (schedule.oneJobAtATime || !b.crew || b.crew === crewId) && start < b.end + gap && end + gap > b.start);
+    };
+
+    // A calendar event, stretched into the time the job really takes: at least a job's length from
+    // its start (hand-made events are often an hour long or have no end), plus the drive there and
+    // back when it's far away. The bridge sends `travel` as one-way minutes; the usual buffer
+    // already covers a drive across town, so only the extra on top of it is added.
+    const fromCalendar = (b) => {
+      const start = Number(b.start);
+      if (!(start > 0)) return null;
+      const least = schedule.calendarJobMinutes || {};
+      const end = Math.max(Number(b.end) || start, start + (least[b.kind] || least.full || 0) * 60000);
+      const pad = Math.max(0, (Number(b.travel) || 0) - schedule.bufferMinutes) * 60000;
+      return { start: start - pad, end: end + pad, crew: CREW_IDS.includes(b.crew) ? b.crew : null };
     };
 
     // When both can take it, give it to whoever has less on the books that week, so jobs alternate.
@@ -374,9 +388,7 @@
         loads.push(fetch(schedule.calendarUrl, { cache: 'no-store' })
           .then((res) => readJson(res, 'Calendar'))
           .then((data) => {
-            shared.calendar = (data.busy || [])
-              .map((b) => ({ start: Number(b.start), end: Number(b.end), crew: CREW_IDS.includes(b.crew) ? b.crew : null }))
-              .filter((b) => b.end > b.start);
+            shared.calendar = (data.busy || []).map(fromCalendar).filter((b) => b && b.end > b.start);
           }));
       }
       (await Promise.allSettled(loads))
@@ -494,8 +506,8 @@
       const starts = slotsFor(day, plan);
 
       // One run of slots through the day, spaced like a single detailer's back-to-back jobs, rather
-      // than a start every half hour. On days both detailers are free, the second person's time
-      // shows up as soon as one of these is booked.
+      // than a start every half hour. (If oneJobAtATime is switched off, the second detailer's time
+      // shows up as soon as one of these is booked.)
       const open = [];
       let freeAt = -Infinity;
       starts.forEach((slot) => {
