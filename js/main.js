@@ -269,7 +269,6 @@
 
     const timeText = (ms) => new Date(ms).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
     const dateText = (day, opts) => new Date(day.noon).toLocaleDateString('en-US', { timeZone: TZ, ...opts });
-    const slotTime = (slot) => timeText(slot.at).replace(':00', '');
     const slotLabel = (slot) => `${dateText(slot.day, { weekday: 'short', month: 'short', day: 'numeric' })} at ${timeText(slot.at)}`;
     const keyFor = (day, minute) => `${day.key}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
 
@@ -465,9 +464,8 @@
         .map((slot) => ({ ...slot, crew: pickCrew(slot.crews, day, busy) }));
     };
 
-    // Times sit in these bands so a day never turns into one long list.
-    const BANDS = [['Morning', 0, 12 * 60], ['Afternoon', 12 * 60, 17 * 60], ['Evening', 17 * 60, 24 * 60]];
     const QUICK_PICKS = 4;
+    const CELL = 15; // minutes per cell when working out which stretches are booked or nobody's working
 
     // The week runs from today, not from Sunday, so a day that has already gone never shows up.
     const windowStart = (offset) => addDays(today(), offset * 7);
@@ -477,6 +475,60 @@
       if (n === 0) return 'Today';
       if (n === 1) return 'Tomorrow';
       return dateText(day, { weekday: 'long' });
+    };
+
+    // Shop-clock minutes to text: 690 -> '11:30', 840 -> '2'. Ranges share AM/PM when they can.
+    const clock = (minute) => {
+      const h = Math.floor(minute / 60) % 24;
+      return `${h % 12 || 12}${minute % 60 ? `:${pad2(minute % 60)}` : ''}`;
+    };
+    const meridiem = (minute) => (Math.floor(minute / 60) % 24 < 12 ? 'AM' : 'PM');
+    const rangeText = (from, to) => (meridiem(from) === meridiem(to)
+      ? `${clock(from)} – ${clock(to)} ${meridiem(to)}`
+      : `${clock(from)} ${meridiem(from)} – ${clock(to)} ${meridiem(to)}`);
+
+    // A day as the customer sees it: a few open time slots, each from arrival to roughly when the
+    // job wraps up, plus the stretches in between — booked where something is on the calendar,
+    // unavailable where nobody is working — so the day reads like a real schedule.
+    const scheduleFor = (day, plan) => {
+      const starts = slotsFor(day, plan);
+
+      // One run of slots through the day, spaced like a single detailer's back-to-back jobs, rather
+      // than a start every half hour. On days both detailers are free, the second person's time
+      // shows up as soon as one of these is booked.
+      const open = [];
+      let freeAt = -Infinity;
+      starts.forEach((slot) => {
+        if (slot.minute < freeAt) return;
+        open.push({ ...slot, until: Math.ceil((slot.minute + plan.minutes) / 30) * 30 });
+        freeAt = slot.minute + plan.minutes + schedule.bufferMinutes;
+      });
+      const rows = open.map((slot) => ({ kind: 'open', from: slot.minute, to: slot.until, slot }));
+
+      const blocks = CREW_IDS.flatMap((id) => schedule.crew[id].week[DAY_KEYS[day.wd]] || []);
+      if (blocks.length) {
+        const dayFrom = Math.min(...blocks.map((b) => toMinutes(b.start)));
+        const dayTo = Math.max(...blocks.map((b) => toMinutes(b.end)));
+        const busy = allBusy();
+        const kindAt = (from) => {
+          const to = from + CELL;
+          if (open.some((slot) => from < slot.until && to > slot.minute)) return 'open';
+          const a = atLocal(day, from);
+          const b = atLocal(day, to);
+          return busy.some((x) => a < x.end && b > x.start) ? 'booked' : 'off';
+        };
+        let run = null;
+        for (let minute = dayFrom; minute <= dayTo; minute += CELL) {
+          const kind = minute < dayTo ? kindAt(minute) : null;
+          if (run && run.kind === kind) { run.to = minute + CELL; continue; }
+          // Gaps under an hour (travel time, the tail end of a day) aren't worth a row of their own.
+          if (run && run.kind !== 'open' && run.to - run.from >= 60) rows.push(run);
+          run = kind ? { kind, from: minute, to: minute + CELL } : null;
+        }
+      }
+
+      rows.sort((a, b) => a.from - b.from);
+      return { open, rows };
     };
 
     const isChosen = (slot) => Boolean(chosenSlot && chosenSlot.key === slot.key);
@@ -489,16 +541,28 @@
       if (showLiveErrors) renderErrors();
     };
 
+    const rowParts = (time, state) => [
+      Object.assign(document.createElement('span'), { className: 'slot-time', textContent: time }),
+      Object.assign(document.createElement('span'), { className: 'slot-state', textContent: state }),
+    ];
+
     const slotButton = (slot) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'slot';
-      btn.textContent = slotTime(slot);
-      btn.setAttribute('aria-label', slotLabel(slot));
+      btn.append(...rowParts(rangeText(slot.minute, slot.until), isChosen(slot) ? 'Selected' : 'Open'));
+      btn.setAttribute('aria-label', `${slotLabel(slot)}, until about ${clock(slot.until)} ${meridiem(slot.until)}`);
       btn.setAttribute('aria-pressed', isChosen(slot) ? 'true' : 'false');
       if (isChosen(slot)) btn.classList.add('is-chosen');
       btn.addEventListener('click', () => chooseSlot(slot));
       return btn;
+    };
+
+    const greyRow = (row) => {
+      const el = document.createElement('div');
+      el.className = `slot ${row.kind === 'booked' ? 'slot--taken' : 'slot--off'}`;
+      el.append(...rowParts(rangeText(row.from, row.to), row.kind === 'booked' ? 'Booked' : 'Unavailable'));
+      return el;
     };
 
     // The next few openings, for anyone who just wants the soonest one.
@@ -506,7 +570,7 @@
       const picks = [];
       for (let i = 0; i <= schedule.weeksAhead * 7 && picks.length < QUICK_PICKS; i++) {
         // At most two per day, so the row spreads across days instead of stacking on one.
-        slotsFor(addDays(today(), i), plan).slice(0, 2).forEach((slot) => { if (picks.length < QUICK_PICKS) picks.push(slot); });
+        scheduleFor(addDays(today(), i), plan).open.slice(0, 2).forEach((slot) => { if (picks.length < QUICK_PICKS) picks.push(slot); });
       }
 
       quick.hidden = !picks.length;
@@ -527,7 +591,7 @@
         btn.setAttribute('aria-label', slotLabel(slot));
         btn.append(
           Object.assign(document.createElement('span'), { className: 'quick-day', textContent: dayRelative(slot.day) }),
-          Object.assign(document.createElement('span'), { className: 'quick-time', textContent: slotTime(slot) }),
+          Object.assign(document.createElement('span'), { className: 'quick-time', textContent: rangeText(slot.minute, slot.until) }),
         );
         btn.addEventListener('click', () => chooseSlot(slot));
         row.append(btn);
@@ -536,7 +600,7 @@
       quick.replaceChildren(label, row);
     };
 
-    const renderTimes = (day, slots) => {
+    const renderTimes = (day, sched) => {
       if (!day) {
         weekTimes.replaceChildren(Object.assign(document.createElement('p'), {
           className: 'times-empty',
@@ -549,66 +613,48 @@
       head.className = 'times-head';
       head.append(
         Object.assign(document.createElement('p'), { className: 'times-day', textContent: dateText(day, { weekday: 'long', month: 'short', day: 'numeric' }) }),
-        Object.assign(document.createElement('p'), { className: 'times-meta', textContent: slots.length ? `${slots.length} open` : 'No openings' }),
+        Object.assign(document.createElement('p'), { className: 'times-meta', textContent: sched.open.length === 1 ? '1 slot open' : `${sched.open.length} slots open` }),
       );
 
-      const body = document.createElement('div');
-      body.className = 'times-body';
+      const list = document.createElement('div');
+      list.className = 'slot-list';
+      sched.rows.forEach((row) => list.append(row.kind === 'open' ? slotButton(row.slot) : greyRow(row)));
 
-      if (!slots.length) {
-        body.append(Object.assign(document.createElement('p'), {
-          className: 'times-empty',
-          textContent: 'Nothing open this day. Pick another day above, or text us and we’ll work you in.',
-        }));
-      } else {
-        BANDS.forEach(([name, from, to]) => {
-          const inBand = slots.filter((slot) => slot.minute >= from && slot.minute < to);
-          if (!inBand.length) return;
-          const band = document.createElement('div');
-          band.className = 'times-band';
-          band.append(Object.assign(document.createElement('p'), { className: 'times-band-label', textContent: name }));
-          const row = document.createElement('div');
-          row.className = 'times-row';
-          inBand.forEach((slot) => row.append(slotButton(slot)));
-          band.append(row);
-          body.append(band);
-        });
-      }
-
-      weekTimes.replaceChildren(head, body);
+      weekTimes.replaceChildren(head, list);
     };
 
     const renderWeek = () => {
       const plan = jobPlan();
-
-      // A longer job, a daylight add-on or someone else's booking can take a spot that was free a
-      // moment ago. If it's still there, pick up who'd now take it.
-      if (chosenSlot) {
-        chosenSlot = slotsFor(chosenSlot.day, plan).find((slot) => slot.key === chosenSlot.key) || null;
-      }
-      if (chosenSlot) activeDay = chosenSlot.day;
-
       const start = windowStart(weekOffset);
       const days = Array.from({ length: 7 }, (_, i) => {
         const date = addDays(start, i);
-        return { date, slots: slotsFor(date, plan) };
+        return { date, sched: scheduleFor(date, plan) };
       });
+
+      // A longer job, a daylight add-on or someone else's booking can take a slot that was free a
+      // moment ago. If it's still on offer, pick up who'd now take it.
+      if (chosenSlot) {
+        const sched = (days.find((d) => sameDay(d.date, chosenSlot.day)) || {}).sched || scheduleFor(chosenSlot.day, plan);
+        chosenSlot = sched.open.find((slot) => slot.key === chosenSlot.key) || null;
+      }
+      if (chosenSlot) activeDay = chosenSlot.day;
 
       // Land on a day that has something on it rather than an empty one.
       let current = days.find((d) => sameDay(d.date, activeDay));
-      if (!current || !current.slots.length) current = days.find((d) => d.slots.length) || null;
+      if (!current || !current.sched.open.length) current = days.find((d) => d.sched.open.length) || null;
       activeDay = current ? current.date : null;
 
       const todayDay = today();
-      weekDays.replaceChildren(...days.map(({ date, slots }) => {
+      weekDays.replaceChildren(...days.map(({ date, sched }) => {
+        const count = sched.open.length;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'day';
-        btn.disabled = !slots.length;
+        btn.disabled = !count;
         if (sameDay(date, todayDay)) btn.classList.add('day--today');
         if (sameDay(date, activeDay)) btn.classList.add('is-active');
         btn.setAttribute('aria-pressed', sameDay(date, activeDay) ? 'true' : 'false');
-        btn.setAttribute('aria-label', `${dateText(date, { weekday: 'long', month: 'long', day: 'numeric' })} — ${slots.length ? `${slots.length} open` : 'nothing open'}`);
+        btn.setAttribute('aria-label', `${dateText(date, { weekday: 'long', month: 'long', day: 'numeric' })} — ${count ? `${count} open` : 'nothing open'}`);
         btn.append(
           Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.wd] }),
           Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.d }),
@@ -621,7 +667,7 @@
         return btn;
       }));
 
-      renderTimes(activeDay, current ? current.slots : []);
+      renderTimes(activeDay, current ? current.sched : null);
       renderQuick(plan);
 
       const fmt = { month: 'short', day: 'numeric' };
@@ -630,7 +676,7 @@
         ? `Today – ${dateText(end, fmt)}`
         : `${dateText(start, fmt)} – ${dateText(end, fmt)}`;
       const outside = plan.daylightJob || plan.daylightAddon;
-      weekNote.textContent = `Each opening fits your job — about ${lengthText(plan.minutes)}${outside ? ', wrapping up before dark' : ''}. We’ll text you to confirm the spot before it’s locked in.`;
+      weekNote.textContent = `Each slot runs from when we arrive to roughly when we finish — about ${lengthText(plan.minutes)}${outside ? ', wrapped up before dark' : ''}. We’ll text you to confirm.`;
       weekPrev.disabled = weekOffset <= 0;
       weekNext.disabled = weekOffset >= schedule.weeksAhead;
     };
@@ -1050,14 +1096,13 @@
     sync();
   });
 
-  /* ---------- Reviews ---------- */
+  /* ---------- Reviews: two columns drifting opposite ways ---------- */
 
   {
     const data = window.WD_REVIEWS;
-    const scoreBox = $('#review-score');
-    const feedBox = $('#review-feed');
+    const tracks = $$('[data-feed]');
 
-    if (data && scoreBox && feedBox) {
+    if (data) {
       const svgNS = 'http://www.w3.org/2000/svg';
       const icon = (id, className) => {
         const svg = document.createElementNS(svgNS, 'svg');
@@ -1069,103 +1114,68 @@
         return svg;
       };
 
-      // Nextdoor's own mark isn't ours to ship, so the name stands in for it.
-      const sourceMark = (key) => {
-        const wrap = document.createElement('span');
-        wrap.className = `mark mark--${key}`;
-        if (key === 'google') {
-          wrap.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'Google' }));
-        } else {
-          wrap.append(Object.assign(document.createElement('span'), { className: 'mark-word', textContent: 'Nextdoor' }));
-        }
-        return wrap;
-      };
-
-      const stars = (rating) => {
-        const row = document.createElement('span');
-        row.className = 'stars';
-        row.setAttribute('role', 'img');
-        row.setAttribute('aria-label', `${rating} out of 5 stars`);
-        for (let i = 0; i < 5; i++) {
+      const fillStars = (el, rating) => {
+        el.setAttribute('role', 'img');
+        el.setAttribute('aria-label', `${rating} out of 5 stars`);
+        el.replaceChildren(...Array.from({ length: 5 }, (_, i) => {
           const star = icon('i-star', 'star');
           if (i >= Math.round(rating)) star.classList.add('star--off');
-          row.append(star);
-        }
-        return row;
-      };
-
-      // The panel asks for a review rather than counting them.
-      const renderScore = () => {
-        const google = data.sources.google || {};
-        const parts = [];
-
-        if (google.rating) {
-          const score = document.createElement('div');
-          score.className = 'score-rating';
-          score.append(
-            stars(google.rating),
-            Object.assign(document.createElement('p'), { className: 'score-number', textContent: `${Number(google.rating).toFixed(1)} on Google` }),
-          );
-          parts.push(score);
-        }
-
-        const pitch = document.createElement('div');
-        pitch.className = 'score-pitch';
-        pitch.append(
-          Object.assign(document.createElement('p'), { className: 'score-eyebrow', textContent: 'Reviews mean everything' }),
-          Object.assign(document.createElement('p'), { className: 'score-title', textContent: 'Had us out? Tell people.' }),
-          Object.assign(document.createElement('p'), { className: 'score-copy', textContent: 'We’re a young crew building this one car at a time. If we did right by yours, a review on Google does more for us than anything else.' }),
-        );
-        parts.push(pitch);
-
-        const target = google.writeUrl && !google.writeUrl.endsWith('=') ? google.writeUrl : google.url;
-        if (target) {
-          const cta = document.createElement('a');
-          cta.className = 'btn btn-primary score-link';
-          cta.href = target;
-          cta.target = '_blank';
-          cta.rel = 'noopener';
-          cta.append(icon('logo-google', 'mark-logo'), Object.assign(document.createElement('span'), { textContent: 'Review us on Google' }));
-          parts.push(cta);
-        }
-
-        scoreBox.replaceChildren(...parts);
-      };
-
-      const renderFeed = () => {
-        const ordered = data.list.slice().sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
-
-        feedBox.replaceChildren(...ordered.map((review) => {
-          const card = document.createElement('figure');
-          card.className = 'review';
-          if (review.featured) card.classList.add('review--featured');
-
-          const top = document.createElement('div');
-          top.className = 'review-top';
-          top.append(sourceMark(review.source));
-          if (review.rating) top.append(stars(review.rating));
-
-          const quote = document.createElement('blockquote');
-          quote.append(Object.assign(document.createElement('p'), { textContent: review.text }));
-
-          const cap = document.createElement('figcaption');
-          const who = document.createElement('span');
-          who.append(
-            Object.assign(document.createElement('span'), { className: 'review-name', textContent: review.name }),
-            Object.assign(document.createElement('span'), { className: 'review-source', textContent: review.place || data.sources[review.source].name }),
-          );
-          cap.append(
-            Object.assign(document.createElement('span'), { className: 'review-avatar', textContent: review.name.trim().charAt(0), ariaHidden: 'true' }),
-            who,
-          );
-
-          card.append(top, quote, cap);
-          return card;
+          return star;
         }));
       };
 
-      renderScore();
-      renderFeed();
+      // The Google rating, wherever it's shown: the hero line and the top of the Google column.
+      const google = data.google || {};
+      if (google.rating) {
+        const rating = Number(google.rating).toFixed(1);
+        const count = Number(google.count) > 0 ? ` · ${google.count} reviews` : '';
+        $$('[data-google-stars]').forEach((el) => fillStars(el, google.rating));
+        $$('[data-google-summary="long"]').forEach((el) => { el.textContent = `${rating} on Google${count}`; });
+        $$('[data-google-summary="short"]').forEach((el) => { el.textContent = `${rating}${count}`; });
+      }
+      if (google.url) $$('[data-google-link]').forEach((el) => { el.href = google.url; });
+
+      const card = (review, copy) => {
+        const el = document.createElement('figure');
+        el.className = 'review';
+        if (copy) el.setAttribute('aria-hidden', 'true');
+
+        const quote = document.createElement('blockquote');
+        quote.append(Object.assign(document.createElement('p'), { textContent: review.text }));
+
+        const who = document.createElement('span');
+        who.append(
+          Object.assign(document.createElement('span'), { className: 'review-name', textContent: review.name }),
+          Object.assign(document.createElement('span'), { className: 'review-source', textContent: review.place || (review.source === 'google' ? 'Google review' : 'Nextdoor') }),
+        );
+        const cap = document.createElement('figcaption');
+        cap.append(Object.assign(document.createElement('span'), { className: 'review-avatar', textContent: review.name.trim().charAt(0) }), who);
+        cap.firstChild.setAttribute('aria-hidden', 'true');
+
+        // Nextdoor recommendations don't come with stars, so only Google reviews show them.
+        if (review.source === 'google') {
+          const stars = document.createElement('span');
+          stars.className = 'stars';
+          fillStars(stars, 5);
+          el.append(stars);
+        }
+        el.append(quote, cap);
+        return el;
+      };
+
+      tracks.forEach((track) => {
+        const items = data.list.filter((r) => r.source === track.dataset.feed);
+        const column = track.closest('[data-feed-col]');
+        if (!items.length) {
+          if (column) column.hidden = true;
+          return;
+        }
+        // The list goes in twice, so sliding it half its height loops without a seam.
+        // The copy is hidden from screen readers.
+        [false, true].forEach((copy) => items.forEach((r) => track.append(card(r, copy))));
+        // About seven seconds a review keeps both columns drifting at a similar, readable pace.
+        track.style.setProperty('--duration', `${Math.max(24, items.length * 7)}s`);
+      });
     }
   }
 
