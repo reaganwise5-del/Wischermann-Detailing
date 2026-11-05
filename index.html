@@ -46,7 +46,9 @@
     "telephone": "+1-919-632-3198",
     "priceRange": "$$",
     "address": { "@type": "PostalAddress", "addressLocality": "Lynchburg", "addressRegion": "VA", "addressCountry": "US" },
-    "areaServed": ["Lynchburg, VA", "Forest, VA", "Madison Heights, VA", "Boonsboro, VA", "Timberlake, VA", "Rustburg, VA", "Amherst, VA", "Bedford, VA"]
+    "areaServed": ["Lynchburg, VA", "Forest, VA", "Madison Heights, VA", "Boonsboro, VA", "Timberlake, VA", "Rustburg, VA", "Amherst, VA", "Bedford, VA"],
+    "url": "https://wischermanndetailing.com/",
+    "sameAs": ["https://www.instagram.com/wischermanndetailing/", "https://www.facebook.com/profile.php?id=61583271320175"]
   }
   </script>
 </head>
@@ -87,6 +89,26 @@
       <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
       <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/>
       <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+    </symbol>
+    <!-- Instagram and Facebook marks, in their own brand colours, for the quick links. -->
+    <symbol id="logo-instagram" viewBox="0 0 24 24">
+      <defs>
+        <radialGradient id="ig-glow" cx="28%" cy="108%" r="140%">
+          <stop offset="0" stop-color="#fdd56b"/>
+          <stop offset=".12" stop-color="#fdd56b"/>
+          <stop offset=".45" stop-color="#f4502f"/>
+          <stop offset=".62" stop-color="#d62a8a"/>
+          <stop offset=".95" stop-color="#5b4fe0"/>
+        </radialGradient>
+      </defs>
+      <rect width="24" height="24" rx="6.5" fill="url(#ig-glow)"/>
+      <rect x="5.4" y="5.4" width="13.2" height="13.2" rx="3.9" fill="none" stroke="#fff" stroke-width="1.8"/>
+      <circle cx="12" cy="12" r="3.15" fill="none" stroke="#fff" stroke-width="1.8"/>
+      <circle cx="16.15" cy="7.85" r="1.05" fill="#fff"/>
+    </symbol>
+    <symbol id="logo-facebook" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="12" fill="#0866ff"/>
+      <path fill="#fff" d="M13.35 24v-8.45h2.85l.5-3.3h-3.35V10.1c0-.92.46-1.8 1.92-1.8h1.48V5.5s-1.35-.23-2.63-.23c-2.68 0-4.43 1.62-4.43 4.56v2.42H6.7v3.3h2.99V24Z"/>
     </symbol>
     <symbol id="i-tire" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3v5.6M12 15.4V21M3 12h5.6M15.4 12H21"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5v17a1 1 0 0 0 1.5.86l14-8.5a1 1 0 0 0 0-1.72l-14-8.5A1 1 0 0 0 6 3.5Z"/></symbol>
@@ -169,6 +191,22 @@
             <span class="stars" data-google-stars></span>
             <strong data-google-summary="long">Rated on Google</strong>
           </a>
+          <!-- Quick links for people who scan the posters. The Instagram and Facebook links are
+               also in the footer, so change both places if they ever move. -->
+          <nav class="quick-links" aria-label="Reviews, social and texting" data-reveal style="--delay: 400ms">
+            <a class="quick-link" href="https://share.google/CcHpPjaMXIDrGmY3s" data-google-link target="_blank" rel="noopener">
+              <svg class="quick-link-mark" aria-hidden="true"><use href="#logo-google"></use></svg>Reviews
+            </a>
+            <a class="quick-link" href="https://www.instagram.com/wischermanndetailing/" target="_blank" rel="noopener">
+              <svg class="quick-link-mark" aria-hidden="true"><use href="#logo-instagram"></use></svg>Instagram
+            </a>
+            <a class="quick-link" href="https://www.facebook.com/profile.php?id=61583271320175" target="_blank" rel="noopener">
+              <svg class="quick-link-mark" aria-hidden="true"><use href="#logo-facebook"></use></svg>Facebook
+            </a>
+            <a class="quick-link" href="sms:+19196323198">
+              <span class="quick-link-mark quick-link-mark--text" aria-hidden="true"><svg class="icon"><use href="#i-message"></use></svg></span>Text us
+            </a>
+          </nav>
         </div>
 
         <figure class="hero-ba" data-reveal style="--delay: 120ms">
@@ -927,6 +965,9 @@
         <ul>
           <li><a href="tel:+19196323198">Call (919) 632-3198</a></li>
           <li><a href="sms:+19196323198">Text (919) 632-3198</a></li>
+          <li><a href="https://share.google/CcHpPjaMXIDrGmY3s" data-google-link target="_blank" rel="noopener">Google reviews</a></li>
+          <li><a href="https://www.instagram.com/wischermanndetailing/" target="_blank" rel="noopener">Instagram</a></li>
+          <li><a href="https://www.facebook.com/profile.php?id=61583271320175" target="_blank" rel="noopener">Facebook</a></li>
           <li><span>Lynchburg, VA &amp; surrounding areas</span></li>
           <li><span>By appointment</span></li>
         </ul>
