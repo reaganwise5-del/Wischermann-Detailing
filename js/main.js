@@ -272,6 +272,34 @@
     const slotLabel = (slot) => `${dateText(slot.day, { weekday: 'short', month: 'short', day: 'numeric' })} at ${timeText(slot.at)}`;
     const keyFor = (day, minute) => `${day.key}T${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
 
+    /* Days nobody can book — the stretches listed under `closed` in availability.js. */
+
+    const isDateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+    const closures = (schedule.closed || [])
+      .map((c) => ({ from: c && c.from, to: c && (c.to || c.from) }))
+      .filter((c) => isDateKey(c.from) && isDateKey(c.to) && c.from <= c.to);
+    const closedOn = (day) => closures.find((c) => day.key >= c.from && day.key <= c.to) || null;
+    const dayFromKey = (key) => {
+      const [y, m, d] = key.split('-').map(Number);
+      return dayOf(y, m, d);
+    };
+    // "Fully booked Nov 19 – 27. Next openings: Saturday, Nov 28." The next day is the first one
+    // after the stretch that really has a slot for this job, as far ahead as the picker goes.
+    const closedText = (c, plan) => {
+      const fmt = { month: 'short', day: 'numeric' };
+      const from = dayFromKey(c.from);
+      const to = dayFromKey(c.to);
+      const span = sameDay(from, to)
+        ? dateText(from, fmt)
+        : `${dateText(from, fmt)} – ${from.m === to.m ? to.d : dateText(to, fmt)}`;
+      const reach = schedule.weeksAhead * 7 + 6;
+      let next = null;
+      for (let day = addDays(to, 1); !next && daysBetween(today(), day) <= reach; day = addDays(day, 1)) {
+        if (scheduleFor(day, plan).open.length) next = day;
+      }
+      return `Fully booked ${span}.${next ? ` Next openings: ${dateText(next, { weekday: 'long', month: 'short', day: 'numeric' })}.` : ''}`;
+    };
+
     /* Sunset in Lynchburg for any date — the standard sunrise equation, good to a minute or two. */
 
     const sunsets = new Map();
@@ -444,6 +472,7 @@
 
     // Every start time on this day that at least one detailer can take, with who'd take it.
     const slotsFor = (day, plan) => {
+      if (closedOn(day)) return [];
       const busy = allBusy();
       const earliest = Date.now() + schedule.leadTimeHours * 3600000;
       const sunset = sunsetFor(day);
@@ -503,6 +532,8 @@
     // job wraps up, plus the stretches in between — booked where something is on the calendar,
     // unavailable where nobody is working — so the day reads like a real schedule.
     const scheduleFor = (day, plan) => {
+      const closed = closedOn(day);
+      if (closed) return { open: [], rows: [], closed };
       const starts = slotsFor(day, plan);
 
       // One run of slots through the day, spaced like a single detailer's back-to-back jobs, rather
@@ -540,7 +571,7 @@
       }
 
       rows.sort((a, b) => a.from - b.from);
-      return { open, rows };
+      return { open, rows, closed: null };
     };
 
     const isChosen = (slot) => Boolean(chosenSlot && chosenSlot.key === slot.key);
@@ -612,12 +643,18 @@
       quick.replaceChildren(label, row);
     };
 
-    const renderTimes = (day, sched) => {
+    // `away` is any closed stretch that falls inside the seven days on show.
+    const renderTimes = (day, sched, away, plan) => {
+      const awayNote = away.length
+        ? Object.assign(document.createElement('p'), { className: 'times-away', textContent: away.map((c) => closedText(c, plan)).join(' ') })
+        : null;
+
       if (!day) {
-        weekTimes.replaceChildren(Object.assign(document.createElement('p'), {
+        const empty = Object.assign(document.createElement('p'), {
           className: 'times-empty',
-          textContent: 'Nothing open in these seven days — try the arrow for the next stretch.',
-        }));
+          textContent: awayNote ? 'Tap the arrow for the next open days.' : 'Nothing open in these seven days — try the arrow for the next stretch.',
+        });
+        weekTimes.replaceChildren(...(awayNote ? [awayNote, empty] : [empty]));
         return;
       }
 
@@ -632,7 +669,7 @@
       list.className = 'slot-list';
       sched.rows.forEach((row) => list.append(row.kind === 'open' ? slotButton(row.slot) : greyRow(row)));
 
-      weekTimes.replaceChildren(head, list);
+      weekTimes.replaceChildren(...(awayNote ? [head, list, awayNote] : [head, list]));
     };
 
     const renderWeek = () => {
@@ -663,10 +700,12 @@
         btn.type = 'button';
         btn.className = 'day';
         btn.disabled = !count;
+        if (sched.closed) btn.classList.add('day--closed');
         if (sameDay(date, todayDay)) btn.classList.add('day--today');
         if (sameDay(date, activeDay)) btn.classList.add('is-active');
         btn.setAttribute('aria-pressed', sameDay(date, activeDay) ? 'true' : 'false');
-        btn.setAttribute('aria-label', `${dateText(date, { weekday: 'long', month: 'long', day: 'numeric' })} — ${count ? `${count} open` : 'nothing open'}`);
+        const status = sched.closed ? 'fully booked' : (count ? `${count} open` : 'nothing open');
+        btn.setAttribute('aria-label', `${dateText(date, { weekday: 'long', month: 'long', day: 'numeric' })} — ${status}`);
         btn.append(
           Object.assign(document.createElement('span'), { className: 'day-name', textContent: DAY_NAMES[date.wd] }),
           Object.assign(document.createElement('span'), { className: 'day-num', textContent: date.d }),
@@ -679,7 +718,7 @@
         return btn;
       }));
 
-      renderTimes(activeDay, current ? current.sched : null);
+      renderTimes(activeDay, current ? current.sched : null, [...new Set(days.map((d) => d.sched.closed).filter(Boolean))], plan);
       renderQuick(plan);
 
       const fmt = { month: 'short', day: 'numeric' };

@@ -888,6 +888,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 .day-num { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; line-height: 1; color: var(--ink); }
 .day-dot { width: 6px; height: 6px; margin-top: 3px; border-radius: 999px; background: var(--brand); }
 .day:disabled .day-dot { background: var(--line-strong); }
+.day--closed .day-num { text-decoration: line-through; text-decoration-thickness: 2px; }
 .day--today .day-num { color: var(--brand); }
 .day.is-active { background: var(--ink); box-shadow: none; }
 .day.is-active .day-name { color: rgb(255 255 255 / .75); }
@@ -900,6 +901,8 @@ textarea.input { min-height: 96px; resize: vertical; }
 .times-day { font-family: var(--font-display); font-size: 1.55rem; font-weight: 800; line-height: 1; text-transform: uppercase; color: var(--ink); }
 .times-meta { font-size: .85rem; font-weight: 600; color: var(--text-dim); }
 .times-empty { font-size: .92rem; line-height: 1.5; color: var(--text-dim); }
+/* A closed stretch that falls in the days on show: "Fully booked Nov 19 – 27. Next openings: …". */
+.times-away { padding: 12px 14px; border-radius: 12px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); font-size: .92rem; font-weight: 600; line-height: 1.45; color: var(--ink); }
 
 .slot-list { display: grid; gap: 8px; }
 .slot {

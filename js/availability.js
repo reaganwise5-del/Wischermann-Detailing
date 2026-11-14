@@ -56,6 +56,13 @@ window.WD_AVAILABILITY = {
   leadTimeHours: 12, // nothing sooner than this from now
   weeksAhead: 4,
 
+  // Days nobody can book, first and last included: breaks, holidays, trips home. The site shows
+  // them as "Fully booked". `label` is only a note for you; customers never see it.
+  // Add a line for each stretch. Old ones can stay; they do no harm once they've passed.
+  closed: [
+    { from: '2026-11-19', to: '2026-11-27', label: 'Thanksgiving break' },
+  ],
+
   crew: {
     taylor: {
       name: 'Taylor',
