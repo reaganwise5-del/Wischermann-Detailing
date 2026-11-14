@@ -1030,6 +1030,15 @@
         } catch (err) {
           console.warn('Could not mark the spot as taken', err); // the request still went through
         }
+        // Tell the Google tag a real request came in, so ads can be judged on bookings rather than
+        // clicks. Only the package and the low end of the estimate go along; nothing personal.
+        try {
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'generate_lead', { currency: 'USD', value: estimate().low, package: request.package });
+          }
+        } catch (err) {
+          console.warn('Could not report the request to the Google tag', err);
+        }
         showResult(request, 'sent');
       } catch (err) {
         console.error(err);

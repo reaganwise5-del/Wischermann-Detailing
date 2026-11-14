@@ -10,7 +10,7 @@ window.WD_REVIEWS = {
     // Your Google business profile — the link the Share button gives you.
     url: 'https://share.google/CcHpPjaMXIDrGmY3s',
     rating: 5.0,
-    count: 18,
+    count: 20,
   },
 
   list: [
